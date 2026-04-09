@@ -24,6 +24,15 @@ PDF翻译工具 - 支持大型PDF（800+页）英译中翻译
   # 使用Claude翻译（更高质量）
   python translate_pdf.py input.pdf --backend claude --api-key sk-xxx
 
+  # 本地离线翻译（MarianMT模型，无需API密钥）
+  python translate_pdf.py input.pdf --backend marian
+
+  # 本地离线翻译（Argos Translate，更轻量）
+  python translate_pdf.py input.pdf --backend argos
+
+  # 本地GPU加速翻译
+  python translate_pdf.py input.pdf --backend marian --device cuda
+
   # 从断点恢复翻译
   python translate_pdf.py input.pdf --resume
 
@@ -54,6 +63,9 @@ def parse_args():
   %(prog)s book.pdf --start 100 --end 200    # 翻译100-200页
   %(prog)s book.pdf --resume                 # 从断点继续
   %(prog)s book.pdf --backend claude --api-key YOUR_KEY  # 用Claude翻译
+  %(prog)s book.pdf --backend marian                     # 本地MarianMT翻译
+  %(prog)s book.pdf --backend argos                      # 本地Argos翻译
+  %(prog)s book.pdf --backend marian --device cuda       # 本地GPU加速
         """,
     )
     parser.add_argument("input", help="输入PDF文件路径")
@@ -66,8 +78,10 @@ def parse_args():
         help="输出格式（默认根据输出文件名判断，无指定则为txt）",
     )
     parser.add_argument(
-        "--backend", choices=["google", "deepl", "claude"], default="google",
-        help="翻译后端（默认: google）",
+        "--backend",
+        choices=["google", "deepl", "claude", "marian", "argos"],
+        default="google",
+        help="翻译后端: google(默认), deepl, claude, marian(本地), argos(本地)",
     )
     parser.add_argument("--api-key", help="翻译API密钥（DeepL/Claude需要）")
     parser.add_argument(
@@ -104,6 +118,10 @@ def parse_args():
     parser.add_argument(
         "--min-chars", type=int, default=5,
         help="最少字符数：少于此字符的页面跳过翻译（默认: 5）",
+    )
+    parser.add_argument(
+        "--device",
+        help="本地模型运行设备: cpu, cuda, mps（仅marian后端有效，默认自动检测）",
     )
 
     return parser.parse_args()
@@ -176,7 +194,11 @@ def main():
     # 初始化翻译后端
     print(f"🌐 翻译后端: {args.backend}", end="")
     try:
-        backend = create_backend(args.backend, args.api_key)
+        backend = create_backend(
+            args.backend,
+            api_key=args.api_key,
+            device=getattr(args, "device", None),
+        )
         print(f" ({backend.name()})")
     except ValueError as e:
         print(f"\n错误: {e}")

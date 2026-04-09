@@ -1,0 +1,11 @@
+# 本地离线翻译额外依赖（按需安装）
+#
+# MarianMT 后端 (--backend marian)
+#   推荐用于有GPU或较好CPU的机器，翻译质量较好
+transformers>=4.40.0
+torch>=2.0.0
+sentencepiece>=0.2.0
+
+# Argos Translate 后端 (--backend argos)
+#   更轻量，纯CPU即可，适合低配机器
+argostranslate>=1.9.0

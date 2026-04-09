@@ -134,12 +134,143 @@ class ClaudeBackend(TranslatorBackend):
         return f"Claude ({self._model})"
 
 
-def create_backend(backend_name: str, api_key: str | None = None) -> TranslatorBackend:
+class MarianBackend(TranslatorBackend):
+    """Helsinki-NLP MarianMT 本地翻译后端（完全离线，无需API）
+
+    使用 Helsinki-NLP/opus-mt-en-zh 模型，首次运行自动下载（~300MB）。
+    支持GPU加速，CPU上也有不错的速度。
+    """
+
+    def __init__(self, model_name: str = "Helsinki-NLP/opus-mt-en-zh", device: str | None = None):
+        from transformers import MarianMTModel, MarianTokenizer
+        import torch
+
+        print(f"  加载本地翻译模型: {model_name} ...")
+        self._tokenizer = MarianTokenizer.from_pretrained(model_name)
+        self._model = MarianMTModel.from_pretrained(model_name)
+
+        if device:
+            self._device = device
+        elif torch.cuda.is_available():
+            self._device = "cuda"
+        else:
+            self._device = "cpu"
+
+        self._model.to(self._device)
+        self._model.eval()
+        self._model_name = model_name
+        print(f"  模型已加载，设备: {self._device}")
+
+    def translate(self, text: str) -> str:
+        if not text or not text.strip():
+            return ""
+        # MarianMT 对输入长度有限制（~512 tokens），需要分段翻译
+        sentences = self._split_into_sentences(text)
+        batches = self._make_batches(sentences, max_tokens=400)
+        translated_parts = []
+        for batch in batches:
+            translated_parts.extend(self._translate_batch(batch))
+        return "\n".join(translated_parts)
+
+    def _translate_batch(self, sentences: list[str]) -> list[str]:
+        """批量翻译多个句子（提升GPU利用率）"""
+        import torch
+
+        encoded = self._tokenizer(
+            sentences, return_tensors="pt", padding=True, truncation=True, max_length=512
+        ).to(self._device)
+        with torch.no_grad():
+            output_ids = self._model.generate(**encoded, max_length=512)
+        return self._tokenizer.batch_decode(output_ids, skip_special_tokens=True)
+
+    def _split_into_sentences(self, text: str) -> list[str]:
+        """将文本分割为句子"""
+        sentences = []
+        for paragraph in text.split("\n"):
+            paragraph = paragraph.strip()
+            if not paragraph:
+                continue
+            # 按句号/问号/感叹号分句
+            parts = re.split(r'(?<=[.!?])\s+', paragraph)
+            for part in parts:
+                part = part.strip()
+                if part:
+                    sentences.append(part)
+        return sentences
+
+    def _make_batches(self, sentences: list[str], max_tokens: int = 400) -> list[list[str]]:
+        """将句子分组为批次，每批不超过max_tokens个token"""
+        batches = []
+        current_batch = []
+        current_len = 0
+        for sent in sentences:
+            token_len = len(self._tokenizer.encode(sent))
+            if current_len + token_len > max_tokens and current_batch:
+                batches.append(current_batch)
+                current_batch = []
+                current_len = 0
+            current_batch.append(sent)
+            current_len += token_len
+        if current_batch:
+            batches.append(current_batch)
+        return batches
+
+    def name(self) -> str:
+        return f"MarianMT 本地模型 ({self._device})"
+
+
+class ArgosBackend(TranslatorBackend):
+    """Argos Translate 本地翻译后端（完全离线，轻量级）
+
+    使用 argostranslate 库，首次运行自动下载语言包。
+    轻量级，适合CPU环境。
+    """
+
+    def __init__(self):
+        import argostranslate.package
+        import argostranslate.translate
+
+        # 检查并安装英→中语言包
+        argostranslate.package.update_package_index()
+        available = argostranslate.package.get_available_packages()
+        en_zh = next(
+            (p for p in available if p.from_code == "en" and p.to_code == "zh"),
+            None,
+        )
+        if en_zh is None:
+            raise RuntimeError("找不到 Argos en→zh 语言包，请检查 argostranslate 安装")
+
+        installed_codes = {
+            (p.from_code, p.to_code)
+            for p in argostranslate.package.get_installed_packages()
+        }
+        if ("en", "zh") not in installed_codes:
+            print("  首次使用，正在下载 Argos en→zh 语言包...")
+            argostranslate.package.install_from_path(en_zh.download())
+            print("  语言包安装完成")
+
+        self._translate_fn = argostranslate.translate.translate
+
+    def translate(self, text: str) -> str:
+        if not text or not text.strip():
+            return ""
+        return self._translate_fn(text, "en", "zh")
+
+    def name(self) -> str:
+        return "Argos Translate 本地模型"
+
+
+def create_backend(
+    backend_name: str,
+    api_key: str | None = None,
+    device: str | None = None,
+) -> TranslatorBackend:
     """工厂方法：创建翻译后端
 
     Args:
-        backend_name: "google", "deepl", "claude"
-        api_key: API密钥（google不需要）
+        backend_name: "google", "deepl", "claude", "marian", "argos"
+        api_key: API密钥（google/marian/argos不需要）
+        device: 本地模型运行设备（仅marian有效）
     """
     if backend_name == "google":
         return GoogleTranslateBackend()
@@ -151,8 +282,15 @@ def create_backend(backend_name: str, api_key: str | None = None) -> TranslatorB
         if not api_key:
             raise ValueError("Claude翻译需要提供API密钥 (--api-key)")
         return ClaudeBackend(api_key)
+    elif backend_name == "marian":
+        return MarianBackend(device=device)
+    elif backend_name == "argos":
+        return ArgosBackend()
     else:
-        raise ValueError(f"不支持的翻译后端: {backend_name}，可选: google, deepl, claude")
+        raise ValueError(
+            f"不支持的翻译后端: {backend_name}\n"
+            f"可选: google, deepl, claude, marian（本地）, argos（本地）"
+        )
 
 
 class BatchTranslator:
