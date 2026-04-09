@@ -153,10 +153,7 @@ def translate_pdf(
 
 
 def build_ui():
-    with gr.Blocks(
-        title="PDF翻译工具 - 英译中",
-        theme=gr.themes.Soft(),
-    ) as app:
+    with gr.Blocks(title="PDF翻译工具 - 英译中") as app:
         gr.Markdown("# PDF 翻译工具\n**支持大型PDF (800+页) 英文翻译为中文**")
 
         with gr.Row():
@@ -242,4 +239,9 @@ def build_ui():
 
 if __name__ == "__main__":
     app = build_ui()
-    app.launch(server_name="0.0.0.0", server_port=7860)
+    app.launch(
+        server_name="0.0.0.0",
+        server_port=7860,
+        share=True,
+        theme=gr.themes.Soft(),
+    )

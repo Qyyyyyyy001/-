@@ -79,9 +79,9 @@ def parse_args():
     )
     parser.add_argument(
         "--backend",
-        choices=["google", "deepl", "claude", "marian", "argos"],
+        choices=["google", "deepl", "claude", "marian", "argos", "builtin"],
         default="google",
-        help="翻译后端: google(默认), deepl, claude, marian(本地), argos(本地)",
+        help="翻译后端: google(默认), marian(本地), argos(本地), builtin(内置演示), deepl, claude",
     )
     parser.add_argument("--api-key", help="翻译API密钥（DeepL/Claude需要）")
     parser.add_argument(

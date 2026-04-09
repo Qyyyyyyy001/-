@@ -219,6 +219,201 @@ class MarianBackend(TranslatorBackend):
         return f"MarianMT 本地模型 ({self._device})"
 
 
+class BuiltinDictBackend(TranslatorBackend):
+    """内置词典翻译后端（无需联网、无需下载，开箱即用）
+
+    基于高频英语词汇词典 + 短语模式匹配。
+    翻译质量有限，仅用于演示和测试整个翻译流程。
+    生产环境建议使用 marian/google/claude 等后端。
+    """
+
+    def __init__(self):
+        # 高频词汇词典（覆盖常见学术/技术用语）
+        self._dict = {
+            # 常用词
+            "the": "", "a": "一个", "an": "一个",
+            "is": "是", "are": "是", "was": "是", "were": "是",
+            "be": "是", "been": "已经", "being": "正在",
+            "have": "有", "has": "有", "had": "有",
+            "do": "做", "does": "做", "did": "做",
+            "will": "将", "would": "会", "shall": "将",
+            "should": "应该", "can": "能", "could": "能够",
+            "may": "可能", "might": "可能", "must": "必须",
+            "and": "和", "or": "或", "but": "但是",
+            "not": "不", "no": "没有", "nor": "也不",
+            "if": "如果", "then": "那么", "else": "否则",
+            "when": "当", "where": "哪里", "while": "当...时",
+            "that": "那个", "this": "这个", "these": "这些", "those": "那些",
+            "it": "它", "its": "它的", "they": "他们", "their": "他们的",
+            "them": "他们", "we": "我们", "our": "我们的",
+            "he": "他", "his": "他的", "she": "她", "her": "她的",
+            "i": "我", "my": "我的", "me": "我", "you": "你", "your": "你的",
+            "in": "在...中", "on": "在...上", "at": "在",
+            "to": "到", "for": "为了", "with": "与",
+            "from": "从", "by": "由", "of": "的",
+            "as": "作为", "into": "进入", "about": "关于",
+            "between": "之间", "through": "通过", "during": "在...期间",
+            "before": "之前", "after": "之后", "above": "之上",
+            "below": "之下", "under": "在...下", "over": "超过",
+            "up": "上", "down": "下", "out": "外",
+            "new": "新的", "old": "旧的", "first": "第一",
+            "last": "最后", "long": "长的", "great": "伟大的",
+            "little": "小的", "own": "自己的", "other": "其他的",
+            "right": "正确的", "big": "大的", "high": "高的",
+            "small": "小的", "large": "大的", "good": "好的",
+            "bad": "坏的", "important": "重要的", "different": "不同的",
+            "same": "相同的", "early": "早期的", "possible": "可能的",
+            "able": "能够的", "many": "许多", "much": "很多",
+            "more": "更多", "most": "最", "very": "非常",
+            "also": "也", "even": "甚至", "just": "只是",
+            "only": "仅仅", "now": "现在", "still": "仍然",
+            "already": "已经", "well": "好", "too": "也",
+            "how": "如何", "what": "什么", "which": "哪个",
+            "who": "谁", "why": "为什么",
+            "all": "所有", "each": "每个", "every": "每个",
+            "both": "两者", "few": "少数", "some": "一些",
+            "any": "任何", "such": "如此", "than": "比",
+            "so": "所以", "because": "因为", "however": "然而",
+            "although": "虽然", "since": "自从", "therefore": "因此",
+            "today": "今天", "world": "世界", "life": "生活",
+            "way": "方式", "day": "天", "time": "时间",
+            "year": "年", "people": "人们", "man": "人",
+            "woman": "女人", "child": "孩子", "children": "孩子们",
+            "thing": "事物", "place": "地方", "work": "工作",
+            "part": "部分", "case": "情况", "number": "数字",
+            "point": "点", "fact": "事实", "hand": "手",
+            "system": "系统", "program": "程序", "question": "问题",
+            "government": "政府", "company": "公司", "group": "团体",
+            "problem": "问题", "example": "例子", "country": "国家",
+            "end": "结束", "head": "头", "house": "房子",
+            "word": "词", "money": "钱", "story": "故事",
+            "information": "信息", "power": "力量", "water": "水",
+            "history": "历史", "change": "变化", "interest": "兴趣",
+            "development": "发展", "experience": "经验", "result": "结果",
+            "idea": "想法", "research": "研究", "study": "学习",
+            "book": "书", "eye": "眼睛", "state": "状态",
+            "family": "家庭", "student": "学生", "school": "学校",
+            "business": "商业", "market": "市场", "industry": "行业",
+            "side": "方面", "service": "服务", "area": "领域",
+            "society": "社会", "line": "线", "name": "名字",
+            "use": "使用", "make": "制造", "find": "发现",
+            "give": "给", "tell": "告诉", "take": "拿",
+            "come": "来", "go": "去", "see": "看",
+            "know": "知道", "get": "获得", "think": "认为",
+            "say": "说", "look": "看", "want": "想要",
+            "need": "需要", "become": "成为", "leave": "离开",
+            "put": "放", "mean": "意味着", "keep": "保持",
+            "let": "让", "begin": "开始", "seem": "似乎",
+            "help": "帮助", "show": "展示", "turn": "转变",
+            "play": "播放", "run": "运行", "move": "移动",
+            "try": "尝试", "ask": "询问", "start": "开始",
+            "learn": "学习", "create": "创建", "provide": "提供",
+            "include": "包括", "continue": "继续", "set": "设置",
+            "follow": "跟随", "call": "调用", "read": "阅读",
+            "allow": "允许", "lead": "引导", "live": "生活",
+            "stand": "站立", "happen": "发生", "carry": "携带",
+            "talk": "说话", "produce": "生产", "hold": "持有",
+            "grow": "增长", "open": "打开", "write": "写",
+            "offer": "提供", "remember": "记住", "consider": "考虑",
+            "appear": "出现", "buy": "购买", "wait": "等待",
+            "serve": "服务", "remain": "保持", "suggest": "建议",
+            "raise": "提高", "pass": "通过", "reach": "到达",
+            "kill": "杀死", "require": "需要", "report": "报告",
+            "decide": "决定", "build": "建造", "stay": "留下",
+            "fall": "下降", "cut": "削减", "describe": "描述",
+            "agree": "同意", "develop": "开发", "understand": "理解",
+            "support": "支持", "recognize": "识别",
+            # 技术/学术词汇
+            "technology": "技术", "computer": "计算机", "data": "数据",
+            "software": "软件", "hardware": "硬件", "network": "网络",
+            "internet": "互联网", "algorithm": "算法", "model": "模型",
+            "intelligence": "智能", "artificial": "人工的",
+            "machine": "机器", "learning": "学习", "deep": "深度",
+            "neural": "神经", "science": "科学", "analysis": "分析",
+            "process": "过程", "method": "方法", "approach": "方法",
+            "theory": "理论", "design": "设计", "performance": "性能",
+            "application": "应用", "applications": "应用",
+            "function": "函数", "language": "语言", "natural": "自然的",
+            "image": "图像", "images": "图像", "video": "视频",
+            "recognition": "识别", "generation": "生成", "training": "训练",
+            "processing": "处理", "understanding": "理解",
+            "optimization": "优化", "classification": "分类",
+            "detection": "检测", "prediction": "预测",
+            "accuracy": "准确率", "error": "错误", "loss": "损失",
+            "feature": "特征", "features": "特征",
+            "input": "输入", "output": "输出", "layer": "层",
+            "parameter": "参数", "parameters": "参数",
+            "dataset": "数据集", "database": "数据库",
+            "framework": "框架", "architecture": "架构",
+            "transformer": "变换器", "transforming": "变革",
+            "attention": "注意力", "memory": "内存",
+            "healthcare": "医疗保健", "diagnosis": "诊断",
+            "finance": "金融", "fraud": "欺诈",
+            "transportation": "交通运输", "education": "教育",
+            "personalized": "个性化的",
+            "chatbots": "聊天机器人", "virtual": "虚拟的",
+            "assistants": "助手", "superhuman": "超人的",
+            "identify": "识别", "objects": "对象",
+            "faces": "人脸", "revolution": "革命",
+            "breakthrough": "突破", "investment": "投资",
+            "reignited": "重新点燃", "optimistic": "乐观的",
+            "researchers": "研究人员", "conference": "会议",
+            "founded": "创立", "college": "学院",
+            "creative": "创造性的", "content": "内容",
+            "impact": "影响", "aspect": "方面",
+            "human": "人类", "across": "跨越",
+            "recent": "最近的", "recently": "最近",
+            "field": "领域", "progress": "进展",
+            "slower": "较慢", "expected": "预期的",
+            "periods": "时期", "known": "已知的",
+            "winters": "寒冬", "self-driving": "自动驾驶",
+            "cars": "汽车", "millions": "数百万",
+            "every": "每个", "vision": "视觉",
+            "algorithms": "算法", "recognize": "识别",
+            "generate": "生成", "beginning": "开始",
+            "felt": "感受到", "match": "匹配",
+            "soon": "很快", "leading": "导致",
+            "enables": "使能", "used": "使用",
+        }
+
+    def translate(self, text: str) -> str:
+        if not text or not text.strip():
+            return ""
+        paragraphs = text.split("\n")
+        translated_paragraphs = []
+        for para in paragraphs:
+            para = para.strip()
+            if not para:
+                continue
+            translated_paragraphs.append(self._translate_paragraph(para))
+        return "\n".join(translated_paragraphs)
+
+    def _translate_paragraph(self, text: str) -> str:
+        # 按句子分割
+        sentences = re.split(r'(?<=[.!?])\s+', text)
+        translated = []
+        for sent in sentences:
+            translated.append(self._translate_sentence(sent))
+        return "".join(translated)
+
+    def _translate_sentence(self, sentence: str) -> str:
+        # 简单的词级翻译
+        words = re.findall(r"[a-zA-Z'-]+|[^a-zA-Z\s]+|\s+", sentence)
+        result = []
+        for word in words:
+            lower = word.lower().strip(".,;:!?\"'()-")
+            if lower in self._dict:
+                translated = self._dict[lower]
+                if translated:  # 跳过空翻译（如 "the"）
+                    result.append(translated)
+            elif word.strip():
+                result.append(word)
+        return "".join(result) + "。"
+
+    def name(self) -> str:
+        return "内置词典 (演示用，建议正式使用时换 marian/google)"
+
+
 class ArgosBackend(TranslatorBackend):
     """Argos Translate 本地翻译后端（完全离线，轻量级）
 
@@ -286,10 +481,12 @@ def create_backend(
         return MarianBackend(device=device)
     elif backend_name == "argos":
         return ArgosBackend()
+    elif backend_name == "builtin":
+        return BuiltinDictBackend()
     else:
         raise ValueError(
             f"不支持的翻译后端: {backend_name}\n"
-            f"可选: google, deepl, claude, marian（本地）, argos（本地）"
+            f"可选: google, deepl, claude, marian（本地）, argos（本地）, builtin（内置演示）"
         )
 
 
