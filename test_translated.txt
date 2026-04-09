@@ -1,0 +1,61 @@
+============================================================
+  第 1 页
+============================================================
+
+【原文】
+Chapter 1: Introduction
+Artificial intelligence is transforming the way we live and work. Machine learning algorithms can now
+recognize images, understand natural language, and even generate creative content. This
+revolution is just beginning, and its impact will be felt across every industry and aspect of human life.
+
+
+----------------------------------------
+
+【译文】
+Chapter1:Introduction。
+人工的智能是变革方式我们生活和工作.。机器学习算法能现在。
+识别图像,理解自然的语言,和甚至生成创造性的内容.。这个。
+革命是只是开始,和它的影响将是感受到跨越每个行业和方面的人类生活.。
+
+============================================================
+  第 2 页
+============================================================
+
+【原文】
+Chapter 2: History
+The field of artificial intelligence was founded in 1956 at a conference at Dartmouth College. Early AI
+researchers were optimistic that machines would soon match human intelligence. However,
+progress was slower than expected, leading to periods known as AI winters. The recent
+breakthrough in deep learning has reignited interest and investment in AI.
+
+
+----------------------------------------
+
+【译文】
+Chapter2:历史。
+领域的人工的智能是创立在...中1956在一个会议在Dartmouth学院.。早期的AI。
+研究人员是乐观的那个machines会很快匹配人类智能.。然而,。
+进展是较慢比预期的,导致到时期已知的作为AI寒冬.。最近的。
+突破在...中深度学习有重新点燃兴趣和投资在...中AI.。
+
+============================================================
+  第 3 页
+============================================================
+
+【原文】
+Chapter 3: Applications
+Today, AI is used in healthcare for disease diagnosis, in finance for fraud detection, in transportation
+for self-driving cars, and in education for personalized learning. Natural language processing
+enables chatbots and virtual assistants that millions of people use every day. Computer vision
+systems can identify objects and faces with superhuman accuracy.
+
+
+----------------------------------------
+
+【译文】
+Chapter3:应用。
+今天,AI是使用在...中医疗保健为了disease诊断,在...中金融为了欺诈检测,在...中交通运输。
+为了自动驾驶汽车,和在...中教育为了个性化的学习.。自然的语言处理。
+使能聊天机器人和虚拟的助手那个数百万的人们使用每个天.。计算机视觉。
+systems能识别对象和人脸与超人的准确率.。
+
