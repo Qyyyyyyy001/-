@@ -232,27 +232,6 @@ body { font-family: var(--font); background: var(--bg-primary); color: var(--tex
                 <input type="number" id="endPage" value="1" min="1">
             </div>
         </div>
-        <div class="form-row">
-            <label>Format</label>
-            <div class="input-wrap">
-                <select id="outputFormat">
-                    <option value="txt">TXT</option>
-                    <option value="pdf">PDF</option>
-                </select>
-            </div>
-        </div>
-        <div class="form-row">
-            <label>Workers</label>
-            <div class="input-wrap">
-                <input type="number" id="workers" value="2" min="1" max="8">
-            </div>
-        </div>
-        <div class="form-row">
-            <label>Bilingual</label>
-            <div class="input-wrap">
-                <label class="toggle"><input type="checkbox" id="bilingual"><span class="slider"></span></label>
-            </div>
-        </div>
     </div>
 
     <!-- Translate Button -->
@@ -324,13 +303,13 @@ function startTranslation() {
 
     const fd = new FormData();
     fd.append('file', uploadedFile);
-    ['backend','apiKey','startPage','endPage','outputFormat','workers'].forEach(id=>{
-        const el = document.getElementById(id);
-        const key = id==='apiKey'?'api_key':id==='startPage'?'start_page':
-                    id==='endPage'?'end_page':id==='outputFormat'?'output_format':id;
-        fd.append(key, el.value);
-    });
-    fd.append('bilingual', document.getElementById('bilingual').checked?'1':'0');
+    fd.append('backend', document.getElementById('backend').value);
+    fd.append('api_key', document.getElementById('apiKey').value);
+    fd.append('start_page', document.getElementById('startPage').value);
+    fd.append('end_page', document.getElementById('endPage').value);
+    fd.append('output_format', 'pdf');
+    fd.append('bilingual', '0');
+    fd.append('workers', '2');
     fetch('/translate',{method:'POST',body:fd}).then(r=>r.json()).then(d=>{ if(d.error) alert(d.error); });
     pollTimer = setInterval(pollProgress, 500);
 }
@@ -446,14 +425,23 @@ class TranslationHandler(http.server.BaseHTTPRequestHandler):
             self._send_json({"error": "请先上传PDF文件"})
             return
 
+        def get_field(name, default=""):
+            """Reliably read a field from cgi.FieldStorage."""
+            if name not in form:
+                return default
+            item = form[name]
+            if isinstance(item, list):
+                return item[0].value if item else default
+            return item.value if hasattr(item, "value") else str(item)
+
         params = {
-            "backend": form.getvalue("backend", "google"),
-            "api_key": form.getvalue("api_key", ""),
-            "start_page": int(form.getvalue("start_page", "1")),
-            "end_page": int(form.getvalue("end_page", "0")),
-            "output_format": form.getvalue("output_format", "txt"),
-            "bilingual": form.getvalue("bilingual", "0") == "1",
-            "workers": int(form.getvalue("workers", "2")),
+            "backend": get_field("backend", "google"),
+            "api_key": get_field("api_key", ""),
+            "start_page": int(get_field("start_page", "1")),
+            "end_page": int(get_field("end_page", "0")),
+            "output_format": get_field("output_format", "pdf"),
+            "bilingual": get_field("bilingual", "0") == "1",
+            "workers": int(get_field("workers", "2")),
         }
 
         thread = threading.Thread(target=run_translation, args=(uploaded_pdf_path, params))
