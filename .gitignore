@@ -1,1 +1,4 @@
 __pycache__/
+test_sample.pdf
+test_translated.txt
+*.progress.json
