@@ -111,6 +111,10 @@ def parse_args():
         help="输出双语对照（原文+译文）",
     )
     parser.add_argument(
+        "--overlay", action="store_true",
+        help="原位翻译模式：保留PDF原有图片和布局，直接替换文字为中文",
+    )
+    parser.add_argument(
         "--resume", action="store_true",
         help="从上次中断处继续翻译",
     )
@@ -156,6 +160,10 @@ def main():
     if not os.path.isfile(args.input):
         print(f"错误: 文件不存在 - {args.input}")
         sys.exit(1)
+
+    # --overlay 模式走单独流程
+    if args.overlay:
+        return run_overlay_mode(args)
 
     # 确定输出路径和格式
     output_path, out_format = determine_output_path(args.input, args.output, args.format)
@@ -316,6 +324,79 @@ def _generate_output(checkpoint: Checkpoint, output_path: str, out_format: str, 
 
     print(f"   文件大小: {size_str}")
     print(f"\n🎉 完成！输出文件: {output_path}")
+
+
+def run_overlay_mode(args):
+    """原位翻译模式：保留图片和布局，直接替换文字"""
+    from pdf_translator.overlay import translate_pdf_inplace
+
+    total_pages = get_page_count(args.input)
+    start = max(0, args.start - 1)
+    end = min(total_pages, args.end) if args.end else total_pages
+
+    # 输出路径
+    if args.output:
+        output_path = args.output
+    else:
+        base = os.path.splitext(args.input)[0]
+        output_path = f"{base}_translated.pdf"
+
+    print(f"📄 读取PDF: {args.input}")
+    print(f"   总页数: {total_pages}")
+    print(f"   翻译范围: 第{start + 1}页 - 第{end}页")
+    print(f"   模式: 原位替换（保留图片和布局）")
+    print(f"   双语: {'是' if args.bilingual else '否（替换原文）'}")
+
+    # 初始化翻译引擎
+    print(f"🌐 翻译后端: {args.backend}", end="")
+    try:
+        backend = create_backend(
+            args.backend,
+            api_key=args.api_key,
+            device=getattr(args, "device", None),
+        )
+        print(f" ({backend.name()})")
+    except ValueError as e:
+        print(f"\n错误: {e}")
+        sys.exit(1)
+
+    # 进度显示
+    try:
+        from tqdm import tqdm
+        progress_bar = tqdm(total=end - start, desc="翻译进度", unit="页")
+        def progress_cb(current, total):
+            progress_bar.update(1)
+    except ImportError:
+        def progress_cb(current, total):
+            print(f"\r  进度: {current}/{total} 页 ({current*100//total}%)", end="", flush=True)
+
+    print(f"🔄 开始原位翻译...\n")
+    start_time = time.time()
+
+    translate_pdf_inplace(
+        input_path=args.input,
+        output_path=output_path,
+        translator_fn=backend.translate,
+        start_page=start,
+        end_page=end,
+        font_path=getattr(args, "font", None),
+        bilingual=args.bilingual,
+        progress_callback=progress_cb,
+    )
+
+    try:
+        progress_bar.close()
+    except Exception:
+        print()
+
+    elapsed = time.time() - start_time
+    file_size = os.path.getsize(output_path)
+    size_str = f"{file_size / 1024 / 1024:.1f} MB" if file_size > 1024 * 1024 else f"{file_size / 1024:.1f} KB"
+
+    print(f"\n✅ 翻译完成! 耗时: {elapsed:.1f}秒")
+    print(f"   文件大小: {size_str}")
+    print(f"\n🎉 完成！输出文件: {output_path}")
+    print(f"   图片和原有布局已保留")
 
 
 if __name__ == "__main__":
