@@ -1,4 +1,8 @@
 __pycache__/
+*.progress.json
+# Test/demo output files
 test_sample.pdf
 test_translated.txt
-*.progress.json
+demo_book.pdf
+demo_translated.txt
+demo_partial.txt
