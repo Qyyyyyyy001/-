@@ -172,8 +172,6 @@ body { font-family: var(--font); background: var(--bg-primary); color: var(--tex
                  margin-bottom: 8px; }
 
 .hidden { display: none; }
-.api-key-row { display: none; }
-.api-key-row.show { display: flex; }
 
 /* === Responsive === */
 @media (max-width: 500px) {
@@ -205,22 +203,22 @@ body { font-family: var(--font); background: var(--bg-primary); color: var(--tex
     <div class="card-title">Settings</div>
     <div class="card">
         <div class="form-row">
-            <label>Engine</label>
+            <label>Language</label>
             <div class="input-wrap">
-                <select id="backend" onchange="toggleApiKey()">
-                    <option value="google">Google Translate</option>
-                    <option value="builtin">Built-in Dictionary</option>
-                    <option value="marian">MarianMT (Local)</option>
-                    <option value="argos">Argos (Local)</option>
-                    <option value="deepl">DeepL</option>
-                    <option value="claude">Claude</option>
+                <select id="targetLang">
+                    <option value="zh-CN">Chinese (Simplified)</option>
+                    <option value="zh-TW">Chinese (Traditional)</option>
+                    <option value="ja">Japanese</option>
+                    <option value="ko">Korean</option>
+                    <option value="fr">French</option>
+                    <option value="de">German</option>
+                    <option value="es">Spanish</option>
+                    <option value="pt">Portuguese</option>
+                    <option value="ru">Russian</option>
+                    <option value="ar">Arabic</option>
+                    <option value="th">Thai</option>
+                    <option value="vi">Vietnamese</option>
                 </select>
-            </div>
-        </div>
-        <div class="form-row api-key-row" id="apiKeyGroup">
-            <label>API Key</label>
-            <div class="input-wrap">
-                <input type="password" id="apiKey" placeholder="Required">
             </div>
         </div>
         <div class="form-row">
@@ -287,11 +285,6 @@ function handleFileSelect(input) {
     });
 }
 
-function toggleApiKey() {
-    const v = document.getElementById('backend').value;
-    document.getElementById('apiKeyGroup').classList.toggle('show', v==='deepl'||v==='claude');
-}
-
 function startTranslation() {
     if (!uploadedFile) { alert('Please upload a PDF first.'); return; }
     const btn = document.getElementById('translateBtn');
@@ -302,13 +295,9 @@ function startTranslation() {
 
     const fd = new FormData();
     fd.append('file', uploadedFile);
-    fd.append('backend', document.getElementById('backend').value);
-    fd.append('api_key', document.getElementById('apiKey').value);
+    fd.append('target_lang', document.getElementById('targetLang').value);
     fd.append('start_page', document.getElementById('startPage').value);
     fd.append('end_page', document.getElementById('endPage').value);
-    fd.append('output_format', 'pdf');
-    fd.append('bilingual', '0');
-    fd.append('workers', '2');
     fetch('/translate',{method:'POST',body:fd}).then(r=>r.json()).then(d=>{ if(d.error) alert(d.error); });
     pollTimer = setInterval(pollProgress, 500);
 }
@@ -434,13 +423,9 @@ class TranslationHandler(http.server.BaseHTTPRequestHandler):
             return item.value if hasattr(item, "value") else str(item)
 
         params = {
-            "backend": get_field("backend", "google"),
-            "api_key": get_field("api_key", ""),
+            "target_lang": get_field("target_lang", "zh-CN"),
             "start_page": int(get_field("start_page", "1")),
             "end_page": int(get_field("end_page", "0")),
-            "output_format": get_field("output_format", "pdf"),
-            "bilingual": get_field("bilingual", "0") == "1",
-            "workers": int(get_field("workers", "2")),
         }
 
         thread = threading.Thread(target=run_translation, args=(uploaded_pdf_path, params))
@@ -495,7 +480,8 @@ def run_translation(pdf_path, params):
         end = min(total_pages, params["end_page"]) if params["end_page"] > 0 else total_pages
         translation_state["total"] = end - start
 
-        engine = create_backend(params["backend"], api_key=params["api_key"] or None)
+        target_lang = params.get("target_lang", "zh-CN")
+        engine = create_backend("google", target_lang=target_lang)
         translation_state["status"] = f"翻译引擎: {engine.name()}"
 
         tmp_dir = tempfile.mkdtemp()

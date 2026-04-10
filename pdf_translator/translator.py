@@ -23,9 +23,10 @@ class TranslatorBackend(ABC):
 class GoogleTranslateBackend(TranslatorBackend):
     """Google翻译后端（免费，使用deep-translator库）"""
 
-    def __init__(self):
+    def __init__(self, target: str = "zh-CN"):
         from deep_translator import GoogleTranslator
-        self._translator = GoogleTranslator(source="en", target="zh-CN")
+        self._translator = GoogleTranslator(source="en", target=target)
+        self._target = target
 
     def translate(self, text: str) -> str:
         if not text or not text.strip():
@@ -82,7 +83,7 @@ class GoogleTranslateBackend(TranslatorBackend):
         return chunks
 
     def name(self) -> str:
-        return "Google Translate"
+        return f"Google Translate → {self._target}"
 
 
 class DeepLBackend(TranslatorBackend):
@@ -459,6 +460,7 @@ def create_backend(
     backend_name: str,
     api_key: str | None = None,
     device: str | None = None,
+    target_lang: str = "zh-CN",
 ) -> TranslatorBackend:
     """工厂方法：创建翻译后端
 
@@ -466,9 +468,10 @@ def create_backend(
         backend_name: "google", "deepl", "claude", "marian", "argos"
         api_key: API密钥（google/marian/argos不需要）
         device: 本地模型运行设备（仅marian有效）
+        target_lang: 目标语言代码（默认zh-CN）
     """
     if backend_name == "google":
-        return GoogleTranslateBackend()
+        return GoogleTranslateBackend(target=target_lang)
     elif backend_name == "deepl":
         if not api_key:
             raise ValueError("DeepL翻译需要提供API密钥 (--api-key)")

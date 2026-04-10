@@ -275,7 +275,7 @@ def _calc_font_size_for_level(
     chars = len(text)
     chars_per_line = max(int(width / (target * 0.72)), 1)
     lines_needed = max(1, (chars + chars_per_line - 1) // chars_per_line)
-    line_height = target * 1.4  # match 140% lineheight
+    line_height = target * 1.6  # match 160% lineheight
     max_lines = max(int(height / line_height), 1)
 
     if lines_needed > max_lines:
@@ -295,7 +295,7 @@ def _insert_text_in_rect(
     page, rect, text, font_size, color, cjk_font=None, cjk_fontname=None
 ):
     """Insert Chinese text into a rectangle with automatic wrapping."""
-    kwargs = {"fontsize": font_size, "color": color, "align": 0, "lineheight": 1.4}
+    kwargs = {"fontsize": font_size, "color": color, "align": 0, "lineheight": 1.6}
     if cjk_fontname:
         kwargs["fontname"] = cjk_fontname
     elif cjk_font:
