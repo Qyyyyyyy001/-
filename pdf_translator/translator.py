@@ -1,4 +1,5 @@
 """翻译引擎模块 - 支持多种翻译后端，带重试和速率限制"""
+from __future__ import annotations
 
 import time
 import re

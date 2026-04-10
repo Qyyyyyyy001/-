@@ -40,6 +40,8 @@ PDF翻译工具 - 支持大型PDF（800+页）英译中翻译
   python translate_pdf.py input.pdf --workers 4
 """
 
+from __future__ import annotations
+
 import argparse
 import os
 import sys

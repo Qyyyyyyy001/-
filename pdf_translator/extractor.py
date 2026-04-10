@@ -1,4 +1,5 @@
 """PDF文本提取模块 - 使用PyMuPDF逐页提取文本，内存友好"""
+from __future__ import annotations
 
 import fitz  # PyMuPDF
 

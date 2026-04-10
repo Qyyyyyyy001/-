@@ -1,4 +1,5 @@
 """输出模块 - 生成翻译后的PDF或双语文本文件"""
+from __future__ import annotations
 
 import os
 from fpdf import FPDF

@@ -1,4 +1,5 @@
 """断点续传模块 - 保存和恢复翻译进度"""
+from __future__ import annotations
 
 import json
 import os
