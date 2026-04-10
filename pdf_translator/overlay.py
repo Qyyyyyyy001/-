@@ -1,12 +1,54 @@
-"""原位翻译模块 - 在原PDF上直接替换文字，保留图片和布局"""
+"""原位翻译模块 - 在原PDF上直接替换文字，保留图片和布局
+
+Typography Design System (inspired by Apple HIG):
+  - Heading levels classified by font size ratio to body
+  - Color contrast: headings darker, captions lighter
+  - Spacing: headings get extra top padding for visual breathing room
+  - Size preservation: translated headings never shrink below body size
+"""
 from __future__ import annotations
 
 import fitz  # PyMuPDF
 
 from pdf_translator.fonts import find_cjk_font
 
-# 标题判定阈值：字号大于正文平均字号的倍数即视为标题
-_TITLE_SIZE_RATIO = 1.25
+# ── Typography Scale ────────────────────────────────────
+# Ratio thresholds relative to body size for heading classification
+_LEVEL_THRESHOLDS = {
+    "h1": 1.8,    # Large Title  (e.g. 24pt when body=12pt)
+    "h2": 1.45,   # Title        (e.g. 18pt when body=12pt)
+    "h3": 1.2,    # Headline     (e.g. 15pt when body=12pt)
+    "body": 0.85, # Body text
+    "caption": 0,  # Small/caption text (below body)
+}
+
+# Color palette per level — (R, G, B) in 0..1 range
+# Darker = more visual weight, lighter = less prominent
+_LEVEL_COLORS = {
+    "h1": (0.067, 0.067, 0.078),   # #111114 — near-black
+    "h2": (0.114, 0.114, 0.129),   # #1d1d21 — very dark gray
+    "h3": (0.180, 0.180, 0.200),   # #2e2e33 — dark gray
+    "body": (0.200, 0.200, 0.220), # #333338 — standard reading gray
+    "caption": (0.400, 0.400, 0.430), # #66666e — lighter for captions
+}
+
+# Minimum font size ratio (vs original) after fitting text into bbox
+_MIN_SIZE_RATIOS = {
+    "h1": 0.92,
+    "h2": 0.90,
+    "h3": 0.88,
+    "body": 0.80,
+    "caption": 0.75,
+}
+
+# Extra top padding (in pt) added above the text box for breathing room
+_TOP_PADDING = {
+    "h1": 4.0,
+    "h2": 3.0,
+    "h3": 2.0,
+    "body": 0.0,
+    "caption": 0.0,
+}
 
 
 def translate_pdf_inplace(
@@ -20,19 +62,6 @@ def translate_pdf_inplace(
     remove_empty: bool = True,
     progress_callback=None,
 ):
-    """在原PDF上原位替换英文为中文，保留图片和布局
-
-    Args:
-        input_path: 输入PDF路径
-        output_path: 输出PDF路径
-        translator_fn: 翻译函数
-        start_page: 起始页码（从0开始）
-        end_page: 结束页码（不含）
-        font_path: 自定义中文字体路径
-        bilingual: 是否在原文下方追加译文
-        remove_empty: 是否删除没有文本内容的页面
-        progress_callback: 进度回调 callback(current, total)
-    """
     cjk_font = find_cjk_font(font_path)
     if not cjk_font:
         cjk_fontname = "china-s"
@@ -60,7 +89,7 @@ def translate_pdf_inplace(
         page = doc[page_num]
         blocks = page.get_text("dict")["blocks"]
 
-        # 收集该页所有文本块及其字号
+        # ── Pass 1: Collect all text blocks and font size data ──
         text_blocks = []
         all_font_sizes = []
 
@@ -70,6 +99,7 @@ def translate_pdf_inplace(
 
             block_text_parts = []
             spans_info = []
+            is_bold = False
 
             for line in block["lines"]:
                 line_parts = []
@@ -78,6 +108,9 @@ def translate_pdf_inplace(
                     if text:
                         line_parts.append(text)
                         spans_info.append(span)
+                        flags = span.get("flags", 0)
+                        if flags & (1 << 4):  # bit 4 = bold
+                            is_bold = True
                 if line_parts:
                     block_text_parts.append(" ".join(line_parts))
 
@@ -96,19 +129,22 @@ def translate_pdf_inplace(
                 "bbox": block["bbox"],
                 "spans_info": spans_info,
                 "avg_size": avg_size,
+                "is_bold": is_bold,
             })
 
-        # 判断该页是否为空页
         if not text_blocks:
             empty_pages.append(page_num)
             if progress_callback:
                 progress_callback(idx + 1, total)
             continue
 
-        # 计算正文基准字号（众数/中位数），用来区分标题与正文
+        # ── Pass 2: Classify each block's typography level ──
         body_size = _estimate_body_size(all_font_sizes)
 
-        # 逐块翻译并替换
+        for tb in text_blocks:
+            tb["level"] = _classify_level(tb["avg_size"], body_size, tb["is_bold"])
+
+        # ── Pass 3: Translate and render with typography system ──
         for tb in text_blocks:
             try:
                 translated = translator_fn(tb["text"])
@@ -118,22 +154,22 @@ def translate_pdf_inplace(
                 continue
 
             bbox = fitz.Rect(tb["bbox"])
+            level = tb["level"]
             orig_size = tb["avg_size"]
-            is_title = orig_size >= body_size * _TITLE_SIZE_RATIO
 
-            # 读取原始颜色
+            # Apply design-system color
+            color = _LEVEL_COLORS.get(level, _LEVEL_COLORS["body"])
+
+            # If the original had a non-black color, respect it for
+            # special elements (links, colored headings, etc.)
             if tb["spans_info"]:
-                orig_color = tb["spans_info"][0].get("color", 0)
-            else:
-                orig_color = 0
-
-            if isinstance(orig_color, int):
-                r = ((orig_color >> 16) & 0xFF) / 255.0
-                g = ((orig_color >> 8) & 0xFF) / 255.0
-                b = (orig_color & 0xFF) / 255.0
-                color = (r, g, b)
-            else:
-                color = (0, 0, 0)
+                raw_color = tb["spans_info"][0].get("color", 0)
+                if isinstance(raw_color, int) and raw_color != 0:
+                    r = ((raw_color >> 16) & 0xFF) / 255.0
+                    g = ((raw_color >> 8) & 0xFF) / 255.0
+                    b = (raw_color & 0xFF) / 255.0
+                    if (r, g, b) != (0, 0, 0):
+                        color = (r, g, b)
 
             if bilingual:
                 insert_y = bbox.y1 + 2
@@ -144,23 +180,26 @@ def translate_pdf_inplace(
                 _insert_text_in_rect(
                     page, insert_rect, translated,
                     font_size=font_size,
-                    color=(0, 0, 0.6),
+                    color=(0.18, 0.24, 0.55),  # muted blue
                     **font_kwargs,
                 )
             else:
-                # 白色覆盖原文
+                # White-out original text
                 page.draw_rect(bbox, color=None, fill=(1, 1, 1))
 
-                # 保持标题/正文的字号层级
-                if is_title:
-                    font_size = _calc_font_size(translated, bbox, orig_size)
-                    # 标题字号不能小于正文
-                    font_size = max(font_size, body_size * 0.95)
-                else:
-                    font_size = _calc_font_size(translated, bbox, orig_size)
+                # Add breathing room for headings
+                padding = _TOP_PADDING.get(level, 0)
+                render_rect = fitz.Rect(
+                    bbox.x0, bbox.y0 + padding, bbox.x1, bbox.y1
+                )
+
+                # Calculate font size — preserve hierarchy
+                font_size = _calc_font_size_for_level(
+                    translated, render_rect, orig_size, body_size, level
+                )
 
                 _insert_text_in_rect(
-                    page, bbox, translated,
+                    page, render_rect, translated,
                     font_size=font_size,
                     color=color,
                     **font_kwargs,
@@ -169,7 +208,7 @@ def translate_pdf_inplace(
         if progress_callback:
             progress_callback(idx + 1, total)
 
-    # 删除空白页（倒序删除避免索引偏移）
+    # Remove empty pages (reverse order to preserve indices)
     if remove_empty and empty_pages:
         for pn in sorted(empty_pages, reverse=True):
             doc.delete_page(pn)
@@ -180,43 +219,81 @@ def translate_pdf_inplace(
     return {"empty_removed": len(empty_pages)}
 
 
+# ── Typography helpers ──────────────────────────────────
+
+def _classify_level(
+    font_size: float, body_size: float, is_bold: bool
+) -> str:
+    """Classify a text block into a typography level based on its
+    font size relative to the page's body size."""
+    if body_size <= 0:
+        return "body"
+    ratio = font_size / body_size
+
+    if ratio >= _LEVEL_THRESHOLDS["h1"]:
+        return "h1"
+    if ratio >= _LEVEL_THRESHOLDS["h2"]:
+        return "h2"
+    if ratio >= _LEVEL_THRESHOLDS["h3"]:
+        return "h3"
+    if ratio >= _LEVEL_THRESHOLDS["body"]:
+        # Bold text at body size is treated as a sub-heading
+        return "h3" if is_bold else "body"
+    return "caption"
+
+
 def _estimate_body_size(font_sizes: list[float]) -> float:
-    """估算正文基准字号（取出现频率最高的字号附近值）"""
+    """Estimate the body text font size (most common size on the page)."""
     if not font_sizes:
         return 12.0
-    # 按字号分桶（四舍五入到整数）
     buckets: dict[int, int] = {}
     for s in font_sizes:
         key = round(s)
         buckets[key] = buckets.get(key, 0) + 1
-    # 取频率最高的桶
-    most_common = max(buckets, key=buckets.get)
-    return float(most_common)
+    return float(max(buckets, key=buckets.get))
 
 
-def _calc_font_size(text: str, rect: fitz.Rect, orig_size: float) -> float:
-    """根据文本长度和可用区域计算合适的字号"""
+def _calc_font_size_for_level(
+    text: str,
+    rect: fitz.Rect,
+    orig_size: float,
+    body_size: float,
+    level: str,
+) -> float:
+    """Calculate the best font size for translated text, respecting
+    the typography level hierarchy."""
     width = rect.width
     height = rect.height
+    if width <= 0 or height <= 0:
+        return max(orig_size * 0.8, 5)
 
+    # Start from original size scaled down slightly for CJK width
+    target = orig_size * 0.9
+
+    # Estimate how many lines we need
     chars = len(text)
-    chars_per_line = max(int(width / (orig_size * 0.7)), 1)
+    chars_per_line = max(int(width / (target * 0.72)), 1)
     lines_needed = max(1, (chars + chars_per_line - 1) // chars_per_line)
-
-    line_height = orig_size * 1.3
+    line_height = target * 1.35
     max_lines = max(int(height / line_height), 1)
 
-    if lines_needed <= max_lines:
-        return orig_size * 0.9
+    if lines_needed > max_lines:
+        # Need to shrink — but respect minimum ratio for this level
+        shrink = max_lines / lines_needed
+        min_ratio = _MIN_SIZE_RATIOS.get(level, 0.8)
+        target = max(orig_size * shrink * 0.9, orig_size * min_ratio)
 
-    ratio = max_lines / lines_needed
-    return max(orig_size * ratio * 0.9, 5)
+    # Headings must never be smaller than body text
+    if level in ("h1", "h2", "h3"):
+        target = max(target, body_size)
+
+    return max(target, 5)
 
 
 def _insert_text_in_rect(
     page, rect, text, font_size, color, cjk_font=None, cjk_fontname=None
 ):
-    """在指定矩形区域内插入中文文本"""
+    """Insert Chinese text into a rectangle with automatic wrapping."""
     kwargs = {"fontsize": font_size, "color": color, "align": 0}
     if cjk_fontname:
         kwargs["fontname"] = cjk_fontname
