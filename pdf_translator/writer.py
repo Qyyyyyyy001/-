@@ -65,45 +65,59 @@ class PDFWriter:
             font_name = "Helvetica"
 
         sorted_pages = sorted(pages.keys())
+        total = len(sorted_pages)
 
-        for page_num in sorted_pages:
+        for idx, page_num in enumerate(sorted_pages):
             data = pages[page_num]
             pdf.add_page()
 
-            # 页眉
+            # 页眉：细线 + 页码 (右上角，Apple风格简洁)
             pdf.set_font(font_name, size=8)
-            pdf.set_text_color(128, 128, 128)
-            pdf.cell(0, 5, f"--- Page {page_num + 1} ---", align="C", new_x="LMARGIN", new_y="NEXT")
-            pdf.ln(3)
+            pdf.set_text_color(174, 174, 178)  # Apple tertiaryLabel
+            pdf.cell(0, 5, f"Page {page_num + 1}", align="R", new_x="LMARGIN", new_y="NEXT")
+            pdf.set_draw_color(229, 229, 234)  # Apple separator
+            pdf.set_line_width(0.3)
+            pdf.line(pdf.l_margin, pdf.get_y() + 1, pdf.w - pdf.r_margin, pdf.get_y() + 1)
+            pdf.ln(8)
 
             if bilingual and data.get("original"):
-                # 双语模式：先原文后译文
+                # 原文：较浅灰色，略小字号
                 pdf.set_font(font_name, size=9)
-                pdf.set_text_color(100, 100, 100)
-                self._write_text(pdf, data["original"])
-                pdf.ln(5)
-                pdf.set_draw_color(200, 200, 200)
-                pdf.line(pdf.l_margin, pdf.get_y(), pdf.w - pdf.r_margin, pdf.get_y())
-                pdf.ln(5)
+                pdf.set_text_color(142, 142, 147)  # Apple secondaryLabel
+                self._write_text(pdf, data["original"], line_height=5.5)
+                pdf.ln(6)
+                # 分隔线：居中短线
+                mid_x = pdf.w / 2
+                pdf.set_draw_color(209, 209, 214)
+                pdf.line(mid_x - 30, pdf.get_y(), mid_x + 30, pdf.get_y())
+                pdf.ln(6)
 
-            # 译文
-            pdf.set_font(font_name, size=10)
-            pdf.set_text_color(0, 0, 0)
+            # 译文：正文黑色
+            pdf.set_font(font_name, size=10.5)
+            pdf.set_text_color(29, 29, 31)  # Apple label (#1d1d1f)
             translated = data.get("translated", "")
             if translated:
-                self._write_text(pdf, translated)
+                self._write_text(pdf, translated, line_height=6.5)
             else:
-                pdf.cell(0, 10, "[本页无可翻译文本]", new_x="LMARGIN", new_y="NEXT")
+                pdf.set_text_color(174, 174, 178)
+                pdf.cell(0, 10, "[No translatable text on this page]",
+                         new_x="LMARGIN", new_y="NEXT")
+
+            # 页脚：页码进度
+            pdf.set_y(-20)
+            pdf.set_font(font_name, size=7)
+            pdf.set_text_color(199, 199, 204)
+            pdf.cell(0, 5, f"{idx + 1} / {total}", align="C")
 
         pdf.output(output_path)
 
-    def _write_text(self, pdf: FPDF, text: str):
-        """将文本写入PDF（自动换行）"""
+    def _write_text(self, pdf: FPDF, text: str, line_height: float = 6):
+        """将文本写入PDF（自动换行，段间距优化）"""
         for paragraph in text.split("\n"):
             paragraph = paragraph.strip()
             if paragraph:
-                pdf.multi_cell(0, 6, paragraph)
-                pdf.ln(2)
+                pdf.multi_cell(0, line_height, paragraph)
+                pdf.ln(3)
 
 
 class TextWriter:
@@ -124,21 +138,36 @@ class TextWriter:
         """
         sorted_pages = sorted(pages.keys())
 
+        total = len(sorted_pages)
+
         with open(output_path, "w", encoding="utf-8") as f:
-            for page_num in sorted_pages:
+            f.write("=" * 52 + "\n")
+            f.write("  PDF Translator | English -> Chinese\n")
+            f.write("=" * 52 + "\n\n")
+
+            for idx, page_num in enumerate(sorted_pages):
                 data = pages[page_num]
-                f.write(f"{'='*60}\n")
-                f.write(f"  第 {page_num + 1} 页\n")
-                f.write(f"{'='*60}\n\n")
+                f.write(f"  [{page_num + 1}]  Page {page_num + 1} of {total}\n")
+                f.write(f"  {'- ' * 24}\n\n")
 
                 if bilingual and data.get("original"):
-                    f.write("【原文】\n")
-                    f.write(data["original"])
-                    f.write("\n\n" + "-" * 40 + "\n\n")
-                    f.write("【译文】\n")
+                    f.write("  ORIGINAL:\n\n")
+                    for line in data["original"].split("\n"):
+                        line = line.strip()
+                        if line:
+                            f.write(f"    {line}\n")
+                    f.write(f"\n  {'~ ' * 20}\n\n")
+                    f.write("  TRANSLATED:\n\n")
 
                 translated = data.get("translated", "")
-                f.write(translated if translated else "[本页无可翻译文本]")
+                if translated:
+                    for line in translated.split("\n"):
+                        line = line.strip()
+                        if line:
+                            f.write(f"    {line}\n")
+                else:
+                    f.write("    [No translatable text on this page]\n")
+
                 f.write("\n\n")
 
 

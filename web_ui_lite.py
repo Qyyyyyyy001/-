@@ -36,225 +36,318 @@ HTML_PAGE = """<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PDF 翻译工具 - 英译中</title>
+<title>PDF Translator</title>
 <style>
+/* === Apple HIG: System Font Stack, Spacing, Radius === */
+:root {
+    --bg-primary: #f5f5f7;
+    --bg-secondary: #ffffff;
+    --bg-tertiary: #f2f2f7;
+    --text-primary: #1d1d1f;
+    --text-secondary: #86868b;
+    --text-tertiary: #aeaeb2;
+    --accent: #0071e3;
+    --accent-hover: #0077ed;
+    --accent-active: #006edb;
+    --green: #34c759;
+    --green-bg: #f0faf3;
+    --separator: rgba(60,60,67,0.12);
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.06);
+    --shadow-md: 0 4px 14px rgba(0,0,0,0.06), 0 2px 6px rgba(0,0,0,0.04);
+    --shadow-lg: 0 8px 28px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.04);
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    --radius-xl: 20px;
+    --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+             "Helvetica Neue", "PingFang SC", "Microsoft YaHei", sans-serif;
+    --font-mono: "SF Mono", SFMono-Regular, ui-monospace, Menlo, Monaco, monospace;
+}
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-       background: #f0f2f5; color: #333; min-height: 100vh; }
-.container { max-width: 900px; margin: 0 auto; padding: 20px; }
-h1 { text-align: center; margin: 20px 0; color: #1a1a2e; font-size: 28px; }
-.subtitle { text-align: center; color: #666; margin-bottom: 30px; }
-.card { background: white; border-radius: 12px; padding: 24px; margin-bottom: 20px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
-.card h2 { font-size: 18px; margin-bottom: 16px; color: #1a1a2e;
-           border-bottom: 2px solid #4361ee; padding-bottom: 8px; display: inline-block; }
-.form-group { margin-bottom: 16px; }
-.form-group label { display: block; font-weight: 600; margin-bottom: 6px; color: #444; }
-.form-group select, .form-group input[type="text"], .form-group input[type="number"],
-.form-group input[type="password"] {
-    width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px;
-    font-size: 14px; transition: border-color 0.2s; }
-.form-group select:focus, .form-group input:focus { border-color: #4361ee; outline: none; }
-.row { display: flex; gap: 16px; }
-.row .form-group { flex: 1; }
-.upload-area { border: 2px dashed #ccc; border-radius: 12px; padding: 40px; text-align: center;
-               cursor: pointer; transition: all 0.3s; background: #fafbfc; }
-.upload-area:hover { border-color: #4361ee; background: #f0f4ff; }
-.upload-area.has-file { border-color: #2ecc71; background: #f0fff4; }
+body { font-family: var(--font); background: var(--bg-primary); color: var(--text-primary);
+       min-height: 100vh; -webkit-font-smoothing: antialiased; }
+
+/* === Layout === */
+.app-header { text-align: center; padding: 48px 20px 32px; }
+.app-header h1 { font-size: 34px; font-weight: 700; letter-spacing: -0.5px;
+                  background: linear-gradient(135deg, var(--text-primary) 0%, #424245 100%);
+                  -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.app-header p { font-size: 17px; color: var(--text-secondary); margin-top: 8px;
+                font-weight: 400; letter-spacing: -0.2px; }
+.container { max-width: 680px; margin: 0 auto; padding: 0 20px 60px; }
+
+/* === Card (Apple grouped-style) === */
+.card { background: var(--bg-secondary); border-radius: var(--radius-lg);
+        padding: 20px; margin-bottom: 16px; box-shadow: var(--shadow-sm); }
+.card-title { font-size: 13px; font-weight: 600; color: var(--text-secondary);
+              text-transform: uppercase; letter-spacing: 0.5px; padding: 0 4px;
+              margin-bottom: 12px; }
+
+/* === Form Elements (Apple native feel) === */
+.form-row { display: flex; align-items: center; padding: 11px 0;
+            border-bottom: 0.5px solid var(--separator); }
+.form-row:last-child { border-bottom: none; }
+.form-row label { flex: 0 0 90px; font-size: 15px; color: var(--text-primary); font-weight: 400; }
+.form-row .input-wrap { flex: 1; display: flex; justify-content: flex-end; }
+.form-row select, .form-row input[type="number"], .form-row input[type="password"] {
+    font-family: var(--font); font-size: 15px; color: var(--text-primary);
+    background: var(--bg-tertiary); border: none; border-radius: var(--radius-sm);
+    padding: 8px 12px; outline: none; text-align: right; width: 100%;
+    transition: background 0.2s; -webkit-appearance: none; }
+.form-row select { padding-right: 28px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5L6 7.5L9 4.5' stroke='%2386868b' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 10px center; text-align: left; }
+.form-row input:focus, .form-row select:focus { background: #e8e8ed; }
+.form-row input[type="number"] { width: 80px; text-align: center; }
+
+/* === Toggle Switch (Apple style) === */
+.toggle { position: relative; width: 51px; height: 31px; flex-shrink: 0; }
+.toggle input { opacity: 0; width: 0; height: 0; }
+.toggle .slider { position: absolute; inset: 0; background: #e9e9eb; border-radius: 31px;
+                  cursor: pointer; transition: background 0.25s; }
+.toggle .slider::before { content: ""; position: absolute; width: 27px; height: 27px;
+    left: 2px; top: 2px; background: white; border-radius: 50%; transition: transform 0.25s;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.15); }
+.toggle input:checked + .slider { background: var(--green); }
+.toggle input:checked + .slider::before { transform: translateX(20px); }
+
+/* === Upload Area === */
+.upload-area { border: 2px dashed var(--separator); border-radius: var(--radius-md);
+               padding: 36px 20px; text-align: center; cursor: pointer;
+               transition: all 0.3s ease; background: var(--bg-tertiary); }
+.upload-area:hover { border-color: var(--accent); background: #f0f5ff; }
+.upload-area.has-file { border-color: var(--green); background: var(--green-bg);
+                        border-style: solid; }
 .upload-area input { display: none; }
-.upload-icon { font-size: 48px; margin-bottom: 12px; }
-.file-info { color: #2ecc71; font-weight: 600; margin-top: 8px; }
-.checkbox-group { display: flex; align-items: center; gap: 8px; }
-.checkbox-group input { width: 18px; height: 18px; }
-.btn { display: inline-block; padding: 12px 32px; border: none; border-radius: 8px;
-       font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
-.btn-primary { background: #4361ee; color: white; width: 100%; }
-.btn-primary:hover { background: #3651d4; }
-.btn-primary:disabled { background: #aaa; cursor: not-allowed; }
-.btn-download { background: #2ecc71; color: white; margin-top: 12px; text-decoration: none;
-                display: inline-block; padding: 10px 24px; border-radius: 8px; font-weight: 600; }
-.btn-download:hover { background: #27ae60; }
-.progress-container { margin: 16px 0; }
-.progress-bar-bg { background: #e9ecef; border-radius: 10px; height: 24px; overflow: hidden; }
-.progress-bar { background: linear-gradient(90deg, #4361ee, #3a86ff); height: 100%;
-                border-radius: 10px; transition: width 0.3s; display: flex; align-items: center;
-                justify-content: center; color: white; font-size: 12px; font-weight: 600;
-                min-width: 40px; }
-.status { margin-top: 8px; color: #666; font-size: 14px; }
-.preview { background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 8px; padding: 16px;
-           margin-top: 12px; white-space: pre-wrap; font-size: 13px; line-height: 1.6;
-           max-height: 400px; overflow-y: auto; font-family: "SF Mono", Monaco, monospace; }
+.upload-icon { width: 48px; height: 48px; margin: 0 auto 12px; border-radius: 12px;
+               background: linear-gradient(135deg, #007aff, #5856d6);
+               display: flex; align-items: center; justify-content: center;
+               font-size: 24px; color: white; box-shadow: 0 4px 12px rgba(0,122,255,0.3); }
+.upload-area.has-file .upload-icon { background: linear-gradient(135deg, #34c759, #30d158);
+               box-shadow: 0 4px 12px rgba(52,199,89,0.3); }
+.upload-label { font-size: 15px; color: var(--text-secondary); margin-top: 4px; }
+.file-info { color: var(--green); font-weight: 500; margin-top: 8px; font-size: 14px; }
+
+/* === Primary Button === */
+.btn-primary { display: block; width: 100%; padding: 16px; border: none;
+               border-radius: var(--radius-md); font-family: var(--font);
+               font-size: 17px; font-weight: 600; letter-spacing: -0.2px;
+               color: white; background: var(--accent); cursor: pointer;
+               transition: all 0.2s; margin-bottom: 16px; box-shadow: var(--shadow-sm); }
+.btn-primary:hover { background: var(--accent-hover); box-shadow: var(--shadow-md);
+                     transform: translateY(-1px); }
+.btn-primary:active { background: var(--accent-active); transform: translateY(0);
+                      box-shadow: var(--shadow-sm); }
+.btn-primary:disabled { background: var(--text-tertiary); cursor: not-allowed;
+                        transform: none; box-shadow: none; }
+
+/* === Download Button === */
+.btn-download { display: inline-flex; align-items: center; gap: 8px; padding: 12px 24px;
+                border: none; border-radius: var(--radius-md); font-family: var(--font);
+                font-size: 15px; font-weight: 600; color: white; background: var(--green);
+                cursor: pointer; transition: all 0.2s; text-decoration: none;
+                box-shadow: var(--shadow-sm); margin-top: 12px; }
+.btn-download:hover { background: #2db84e; box-shadow: var(--shadow-md); }
+.btn-download svg { width: 16px; height: 16px; }
+
+/* === Progress Bar === */
+.progress-wrap { margin: 16px 0; }
+.progress-track { background: var(--bg-tertiary); border-radius: 6px; height: 8px;
+                  overflow: hidden; }
+.progress-fill { height: 100%; border-radius: 6px;
+                 background: linear-gradient(90deg, #007aff, #5ac8fa);
+                 transition: width 0.4s ease; min-width: 4px; }
+.progress-info { display: flex; justify-content: space-between; margin-top: 8px; }
+.progress-pct { font-size: 26px; font-weight: 700; color: var(--text-primary);
+                letter-spacing: -1px; font-variant-numeric: tabular-nums; }
+.progress-status { font-size: 13px; color: var(--text-secondary); margin-top: 4px;
+                   line-height: 1.4; }
+
+/* === Preview === */
+.preview-box { background: var(--bg-tertiary); border-radius: var(--radius-md);
+               padding: 16px; margin-top: 16px; white-space: pre-wrap;
+               font-family: var(--font-mono); font-size: 12px; line-height: 1.7;
+               color: var(--text-primary); max-height: 360px; overflow-y: auto;
+               border: 0.5px solid var(--separator); }
+.preview-title { font-size: 13px; font-weight: 600; color: var(--text-secondary);
+                 text-transform: uppercase; letter-spacing: 0.5px; margin-top: 20px;
+                 margin-bottom: 8px; }
+
 .hidden { display: none; }
-.api-key-group { display: none; }
-.api-key-group.show { display: block; }
+.api-key-row { display: none; }
+.api-key-row.show { display: flex; }
+
+/* === Responsive === */
+@media (max-width: 500px) {
+    .app-header h1 { font-size: 28px; }
+    .form-row label { flex: 0 0 72px; font-size: 14px; }
+}
 </style>
 </head>
 <body>
+<div class="app-header">
+    <h1>PDF Translator</h1>
+    <p>Large PDF (800+ pages) English to Chinese</p>
+</div>
 <div class="container">
-    <h1>PDF 翻译工具</h1>
-    <p class="subtitle">支持大型PDF (800+页) 英文翻译为中文</p>
 
+    <!-- Upload -->
     <div class="card">
-        <h2>上传PDF</h2>
         <div class="upload-area" id="uploadArea" onclick="document.getElementById('fileInput').click()">
-            <div class="upload-icon">📄</div>
-            <div>点击或拖拽上传PDF文件</div>
+            <div class="upload-icon">
+                <svg width="24" height="24" fill="none" viewBox="0 0 24 24"><path d="M12 3v12m0-12L8 7m4-4l4 4" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>
+            </div>
+            <div class="upload-label">Click or drag PDF file here</div>
             <div class="file-info hidden" id="fileInfo"></div>
             <input type="file" id="fileInput" accept=".pdf" onchange="handleFileSelect(this)">
         </div>
     </div>
 
+    <!-- Settings -->
+    <div class="card-title">Settings</div>
     <div class="card">
-        <h2>翻译设置</h2>
-        <div class="form-group">
-            <label>翻译引擎</label>
-            <select id="backend" onchange="toggleApiKey()">
-                <option value="google">Google翻译 (免费，需联网)</option>
-                <option value="builtin">内置词典 (离线演示)</option>
-                <option value="marian">MarianMT (本地离线，需安装transformers)</option>
-                <option value="argos">Argos Translate (本地轻量)</option>
-                <option value="deepl">DeepL (需API密钥)</option>
-                <option value="claude">Claude (需API密钥，质量最高)</option>
-            </select>
-        </div>
-        <div class="form-group api-key-group" id="apiKeyGroup">
-            <label>API密钥</label>
-            <input type="password" id="apiKey" placeholder="输入API密钥">
-        </div>
-        <div class="row">
-            <div class="form-group">
-                <label>起始页</label>
-                <input type="number" id="startPage" value="1" min="1">
+        <div class="form-row">
+            <label>Engine</label>
+            <div class="input-wrap">
+                <select id="backend" onchange="toggleApiKey()">
+                    <option value="google">Google Translate</option>
+                    <option value="builtin">Built-in Dictionary</option>
+                    <option value="marian">MarianMT (Local)</option>
+                    <option value="argos">Argos (Local)</option>
+                    <option value="deepl">DeepL</option>
+                    <option value="claude">Claude</option>
+                </select>
             </div>
-            <div class="form-group">
-                <label>结束页</label>
+        </div>
+        <div class="form-row api-key-row" id="apiKeyGroup">
+            <label>API Key</label>
+            <div class="input-wrap">
+                <input type="password" id="apiKey" placeholder="Required">
+            </div>
+        </div>
+        <div class="form-row">
+            <label>Pages</label>
+            <div class="input-wrap" style="gap:8px;">
+                <input type="number" id="startPage" value="1" min="1">
+                <span style="color:var(--text-tertiary);padding:0 4px;">-</span>
                 <input type="number" id="endPage" value="1" min="1">
             </div>
         </div>
-        <div class="row">
-            <div class="form-group">
-                <label>输出格式</label>
+        <div class="form-row">
+            <label>Format</label>
+            <div class="input-wrap">
                 <select id="outputFormat">
-                    <option value="txt">TXT 文本文件</option>
-                    <option value="pdf">PDF 文件</option>
+                    <option value="txt">TXT</option>
+                    <option value="pdf">PDF</option>
                 </select>
             </div>
-            <div class="form-group">
-                <label>并发线程</label>
+        </div>
+        <div class="form-row">
+            <label>Workers</label>
+            <div class="input-wrap">
                 <input type="number" id="workers" value="2" min="1" max="8">
             </div>
         </div>
-        <div class="form-group">
-            <div class="checkbox-group">
-                <input type="checkbox" id="bilingual">
-                <label for="bilingual" style="font-weight:normal">双语对照 (原文 + 译文)</label>
+        <div class="form-row">
+            <label>Bilingual</label>
+            <div class="input-wrap">
+                <label class="toggle"><input type="checkbox" id="bilingual"><span class="slider"></span></label>
             </div>
         </div>
     </div>
 
-    <button class="btn btn-primary" id="translateBtn" onclick="startTranslation()">
-        开始翻译
-    </button>
+    <!-- Translate Button -->
+    <button class="btn-primary" id="translateBtn" onclick="startTranslation()">Translate</button>
 
-    <div class="card hidden" id="resultCard">
-        <h2>翻译结果</h2>
-        <div class="progress-container">
-            <div class="progress-bar-bg">
-                <div class="progress-bar" id="progressBar" style="width: 0%">0%</div>
+    <!-- Result -->
+    <div class="hidden" id="resultCard">
+        <div class="card">
+            <div class="progress-wrap">
+                <div class="progress-info">
+                    <div>
+                        <div class="progress-pct" id="progressPct">0%</div>
+                        <div class="progress-status" id="statusText">Preparing...</div>
+                    </div>
+                </div>
+                <div class="progress-track">
+                    <div class="progress-fill" id="progressBar" style="width:0%"></div>
+                </div>
+            </div>
+            <div id="downloadArea" class="hidden">
+                <a class="btn-download" id="downloadLink" href="#" download>
+                    <svg viewBox="0 0 16 16" fill="none"><path d="M8 2v8m0 0l-3-3m3 3l3-3M3 12h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    Download
+                </a>
             </div>
         </div>
-        <div class="status" id="statusText">准备中...</div>
-        <div id="downloadArea" class="hidden">
-            <a class="btn-download" id="downloadLink" href="#" download>下载翻译文件</a>
-        </div>
         <div id="previewArea" class="hidden">
-            <h3 style="margin: 16px 0 8px; font-size: 15px;">译文预览</h3>
-            <div class="preview" id="previewText"></div>
+            <div class="preview-title">Preview</div>
+            <div class="preview-box" id="previewText"></div>
         </div>
     </div>
 </div>
 
 <script>
-let uploadedFile = null;
-let pollTimer = null;
+let uploadedFile = null, pollTimer = null;
 
 function handleFileSelect(input) {
     const file = input.files[0];
     if (!file) return;
     uploadedFile = file;
-    const area = document.getElementById('uploadArea');
+    document.getElementById('uploadArea').classList.add('has-file');
     const info = document.getElementById('fileInfo');
-    area.classList.add('has-file');
     info.classList.remove('hidden');
     info.textContent = file.name + ' (' + (file.size/1024/1024).toFixed(1) + ' MB)';
 
-    // 上传获取页数
-    const fd = new FormData();
-    fd.append('file', file);
-    fetch('/upload', {method:'POST', body:fd})
-        .then(r => r.json())
-        .then(d => {
-            if (d.total_pages) {
-                info.textContent = file.name + ' (' + (file.size/1024/1024).toFixed(1) + ' MB, ' + d.total_pages + ' 页)';
-                document.getElementById('endPage').value = d.total_pages;
-                document.getElementById('endPage').max = d.total_pages;
-                document.getElementById('startPage').max = d.total_pages;
-            }
-        });
+    const fd = new FormData(); fd.append('file', file);
+    fetch('/upload', {method:'POST', body:fd}).then(r=>r.json()).then(d=>{
+        if (d.total_pages) {
+            info.textContent = file.name + '  |  ' + (file.size/1024/1024).toFixed(1) + ' MB  |  ' + d.total_pages + ' pages';
+            document.getElementById('endPage').value = d.total_pages;
+            document.getElementById('endPage').max = d.total_pages;
+            document.getElementById('startPage').max = d.total_pages;
+        }
+    });
 }
 
 function toggleApiKey() {
     const v = document.getElementById('backend').value;
-    const g = document.getElementById('apiKeyGroup');
-    g.classList.toggle('show', v === 'deepl' || v === 'claude');
+    document.getElementById('apiKeyGroup').classList.toggle('show', v==='deepl'||v==='claude');
 }
 
 function startTranslation() {
-    if (!uploadedFile) { alert('请先上传PDF文件'); return; }
-
+    if (!uploadedFile) { alert('Please upload a PDF first.'); return; }
     const btn = document.getElementById('translateBtn');
-    btn.disabled = true;
-    btn.textContent = '翻译中...';
-
+    btn.disabled = true; btn.textContent = 'Translating...';
     document.getElementById('resultCard').classList.remove('hidden');
     document.getElementById('downloadArea').classList.add('hidden');
     document.getElementById('previewArea').classList.add('hidden');
 
     const fd = new FormData();
     fd.append('file', uploadedFile);
-    fd.append('backend', document.getElementById('backend').value);
-    fd.append('api_key', document.getElementById('apiKey').value);
-    fd.append('start_page', document.getElementById('startPage').value);
-    fd.append('end_page', document.getElementById('endPage').value);
-    fd.append('output_format', document.getElementById('outputFormat').value);
-    fd.append('bilingual', document.getElementById('bilingual').checked ? '1' : '0');
-    fd.append('workers', document.getElementById('workers').value);
-
-    fetch('/translate', {method:'POST', body:fd})
-        .then(r => r.json())
-        .then(d => { if (d.error) alert(d.error); });
-
-    // 轮询进度
+    ['backend','apiKey','startPage','endPage','outputFormat','workers'].forEach(id=>{
+        const el = document.getElementById(id);
+        const key = id==='apiKey'?'api_key':id==='startPage'?'start_page':
+                    id==='endPage'?'end_page':id==='outputFormat'?'output_format':id;
+        fd.append(key, el.value);
+    });
+    fd.append('bilingual', document.getElementById('bilingual').checked?'1':'0');
+    fetch('/translate',{method:'POST',body:fd}).then(r=>r.json()).then(d=>{ if(d.error) alert(d.error); });
     pollTimer = setInterval(pollProgress, 500);
 }
 
 function pollProgress() {
-    fetch('/progress').then(r => r.json()).then(d => {
-        const pct = d.total > 0 ? Math.round(d.progress / d.total * 100) : 0;
-        const bar = document.getElementById('progressBar');
-        bar.style.width = pct + '%';
-        bar.textContent = pct + '%';
+    fetch('/progress').then(r=>r.json()).then(d=>{
+        const pct = d.total>0 ? Math.round(d.progress/d.total*100) : 0;
+        document.getElementById('progressBar').style.width = pct+'%';
+        document.getElementById('progressPct').textContent = pct+'%';
         document.getElementById('statusText').textContent = d.status;
-
-        if (!d.running && d.progress > 0) {
+        if (!d.running && d.progress>0) {
             clearInterval(pollTimer);
             const btn = document.getElementById('translateBtn');
-            btn.disabled = false;
-            btn.textContent = '开始翻译';
-
+            btn.disabled = false; btn.textContent = 'Translate';
             if (d.result_file) {
                 document.getElementById('downloadArea').classList.remove('hidden');
-                document.getElementById('downloadLink').href = '/download?f=' + encodeURIComponent(d.result_file);
+                document.getElementById('downloadLink').href = '/download?f='+encodeURIComponent(d.result_file);
             }
             if (d.preview) {
                 document.getElementById('previewArea').classList.remove('hidden');
@@ -264,17 +357,13 @@ function pollProgress() {
     });
 }
 
-// 拖拽上传
 const area = document.getElementById('uploadArea');
-area.addEventListener('dragover', e => { e.preventDefault(); area.style.borderColor = '#4361ee'; });
-area.addEventListener('dragleave', e => { area.style.borderColor = ''; });
-area.addEventListener('drop', e => {
-    e.preventDefault(); area.style.borderColor = '';
-    const f = e.dataTransfer.files[0];
-    if (f && f.name.endsWith('.pdf')) {
-        document.getElementById('fileInput').files = e.dataTransfer.files;
-        handleFileSelect(document.getElementById('fileInput'));
-    }
+area.addEventListener('dragover', e=>{e.preventDefault();area.style.borderColor='var(--accent)';});
+area.addEventListener('dragleave', ()=>{area.style.borderColor='';});
+area.addEventListener('drop', e=>{
+    e.preventDefault(); area.style.borderColor='';
+    const f=e.dataTransfer.files[0];
+    if(f&&f.name.endsWith('.pdf')){document.getElementById('fileInput').files=e.dataTransfer.files;handleFileSelect(document.getElementById('fileInput'));}
 });
 </script>
 </body>
