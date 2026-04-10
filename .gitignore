@@ -16,3 +16,6 @@ test_design_out.pdf
 test_full.pdf
 test_full_out.pdf
 test_full_out2.pdf
+test_coverage*.pdf
+test_debug*.pdf
+test_final.pdf
