@@ -15,10 +15,9 @@ import time
 import cgi
 import urllib.parse
 
-from pdf_translator.extractor import get_page_count, extract_pages_batch
-from pdf_translator.translator import create_backend, BatchTranslator
-from pdf_translator.writer import create_writer
-from pdf_translator.checkpoint import Checkpoint
+from pdf_translator.extractor import get_page_count
+from pdf_translator.translator import create_backend
+from pdf_translator.overlay import translate_pdf_inplace
 
 # 全局翻译状态
 translation_state = {
@@ -494,74 +493,47 @@ def run_translation(pdf_path, params):
         total_pages = get_page_count(pdf_path)
         start = max(0, params["start_page"] - 1)
         end = min(total_pages, params["end_page"]) if params["end_page"] > 0 else total_pages
-        page_range = list(range(start, end))
-        translation_state["total"] = len(page_range)
+        translation_state["total"] = end - start
 
         engine = create_backend(params["backend"], api_key=params["api_key"] or None)
         translation_state["status"] = f"翻译引擎: {engine.name()}"
 
-        translator = BatchTranslator(
-            backend=engine,
-            workers=params["workers"],
-            delay=0.3 if params["backend"] == "google" else 0.0,
-        )
-
         tmp_dir = tempfile.mkdtemp()
-        ckpt_path = os.path.join(tmp_dir, "progress.json")
-        checkpoint = Checkpoint(ckpt_path)
-        checkpoint.set_metadata(pdf_path, total_pages, params["backend"])
-
-        batch_size = 10
-        batches = [page_range[i:i + batch_size] for i in range(0, len(page_range), batch_size)]
+        output_path = os.path.join(tmp_dir, "translated.pdf")
         start_time = time.time()
 
-        for batch_pages in batches:
-            page_texts = extract_pages_batch(pdf_path, batch_pages[0], batch_pages[-1] + 1)
-            translatable = [(pn, text) for pn, text in page_texts if len(text.strip()) >= 5]
-            for pn, text in page_texts:
-                if len(text.strip()) < 5:
-                    checkpoint.save_page(pn, text, "")
-
-            if translatable:
-                try:
-                    results = translator.translate_batch(translatable)
-                    for pn, text in translatable:
-                        checkpoint.save_page(pn, text, results.get(pn, ""))
-                except Exception as e:
-                    for pn, text in translatable:
-                        checkpoint.save_page(pn, text, f"[翻译失败: {e}]")
-
-            checkpoint.save()
-            translation_state["progress"] += len(batch_pages)
+        def progress_cb(current, total):
+            translation_state["progress"] = current
             elapsed = time.time() - start_time
-            speed = translation_state["progress"] / elapsed if elapsed > 0 else 0
-            eta = (len(page_range) - translation_state["progress"]) / speed if speed > 0 else 0
+            speed = current / elapsed if elapsed > 0 else 0
+            eta = (total - current) / speed if speed > 0 else 0
             translation_state["status"] = (
-                f"翻译中... {translation_state['progress']}/{len(page_range)} 页 "
+                f"翻译中... {current}/{total} 页 "
                 f"| {speed:.1f} 页/秒 | 剩余 {eta:.0f} 秒"
             )
 
-        # 生成输出
-        translation_state["status"] = "生成输出文件..."
-        ext = ".pdf" if params["output_format"] == "pdf" else ".txt"
-        output_path = os.path.join(tmp_dir, f"translated{ext}")
-        writer = create_writer(params["output_format"])
-        pages_data = checkpoint.get_all_pages()
-        writer.write(pages_data, output_path, bilingual=params["bilingual"])
-
-        # 预览
-        preview_lines = []
-        for pn in sorted(pages_data.keys())[:3]:
-            t = pages_data[pn].get("translated", "")
-            snippet = t[:300] + "..." if len(t) > 300 else t
-            preview_lines.append(f"--- 第 {pn+1} 页 ---\n{snippet}")
+        # 使用overlay模式：保留图片和布局，原位替换文字
+        result = translate_pdf_inplace(
+            input_path=pdf_path,
+            output_path=output_path,
+            translator_fn=engine.translate,
+            start_page=start,
+            end_page=end,
+            remove_empty=True,
+            progress_callback=progress_cb,
+        )
 
         elapsed = time.time() - start_time
+        empty_removed = result.get("empty_removed", 0)
+        status = f"翻译完成! 共 {end - start} 页, 耗时 {elapsed:.1f} 秒"
+        if empty_removed:
+            status += f", 删除 {empty_removed} 个空白页"
+
         translation_state.update({
             "running": False,
-            "status": f"翻译完成! 共 {len(page_range)} 页, 耗时 {elapsed:.1f} 秒",
+            "status": status,
             "result_file": output_path,
-            "preview": "\n\n".join(preview_lines),
+            "preview": "PDF已生成（保留原有图片和布局）",
         })
 
     except Exception as e:

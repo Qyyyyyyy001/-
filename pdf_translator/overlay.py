@@ -5,6 +5,9 @@ import fitz  # PyMuPDF
 
 from pdf_translator.fonts import find_cjk_font
 
+# 标题判定阈值：字号大于正文平均字号的倍数即视为标题
+_TITLE_SIZE_RATIO = 1.25
+
 
 def translate_pdf_inplace(
     input_path: str,
@@ -14,6 +17,7 @@ def translate_pdf_inplace(
     end_page: int | None = None,
     font_path: str | None = None,
     bilingual: bool = False,
+    remove_empty: bool = True,
     progress_callback=None,
 ):
     """在原PDF上原位替换英文为中文，保留图片和布局
@@ -21,22 +25,26 @@ def translate_pdf_inplace(
     Args:
         input_path: 输入PDF路径
         output_path: 输出PDF路径
-        translator_fn: 翻译函数，接收英文字符串返回中文字符串
+        translator_fn: 翻译函数
         start_page: 起始页码（从0开始）
-        end_page: 结束页码（不含），None表示到最后一页
+        end_page: 结束页码（不含）
         font_path: 自定义中文字体路径
-        bilingual: 是否在原文下方追加译文（而非替换）
-        progress_callback: 进度回调函数 callback(current, total)
+        bilingual: 是否在原文下方追加译文
+        remove_empty: 是否删除没有文本内容的页面
+        progress_callback: 进度回调 callback(current, total)
     """
-    # 查找中文字体
     cjk_font = find_cjk_font(font_path)
     if not cjk_font:
-        # PyMuPDF内置的CJK字体名称
-        cjk_fontname = "china-s"  # 简体中文内置字体
+        cjk_fontname = "china-s"
         use_builtin = True
     else:
         cjk_fontname = None
         use_builtin = False
+
+    font_kwargs = {
+        "cjk_font": cjk_font,
+        "cjk_fontname": cjk_fontname if use_builtin else None,
+    }
 
     doc = fitz.open(input_path)
     total_pages = len(doc)
@@ -46,99 +54,144 @@ def translate_pdf_inplace(
 
     pages_to_process = list(range(start_page, end_page))
     total = len(pages_to_process)
+    empty_pages = []
 
     for idx, page_num in enumerate(pages_to_process):
         page = doc[page_num]
-
-        # 获取页面上所有文本块的详细信息
         blocks = page.get_text("dict")["blocks"]
 
+        # 收集该页所有文本块及其字号
+        text_blocks = []
+        all_font_sizes = []
+
         for block in blocks:
-            if block["type"] != 0:  # 跳过非文本块（图片等保留）
+            if block["type"] != 0:
                 continue
 
-            # 收集整个块的文本和位置信息
             block_text_parts = []
             spans_info = []
 
             for line in block["lines"]:
-                line_text_parts = []
+                line_parts = []
                 for span in line["spans"]:
                     text = span["text"].strip()
                     if text:
-                        line_text_parts.append(text)
+                        line_parts.append(text)
                         spans_info.append(span)
-                if line_text_parts:
-                    block_text_parts.append(" ".join(line_text_parts))
+                if line_parts:
+                    block_text_parts.append(" ".join(line_parts))
 
             original_text = " ".join(block_text_parts).strip()
             if not original_text or len(original_text) < 3:
                 continue
 
-            # 翻译
+            avg_size = (
+                sum(s["size"] for s in spans_info) / len(spans_info)
+                if spans_info else 12
+            )
+            all_font_sizes.append(avg_size)
+
+            text_blocks.append({
+                "text": original_text,
+                "bbox": block["bbox"],
+                "spans_info": spans_info,
+                "avg_size": avg_size,
+            })
+
+        # 判断该页是否为空页
+        if not text_blocks:
+            empty_pages.append(page_num)
+            if progress_callback:
+                progress_callback(idx + 1, total)
+            continue
+
+        # 计算正文基准字号（众数/中位数），用来区分标题与正文
+        body_size = _estimate_body_size(all_font_sizes)
+
+        # 逐块翻译并替换
+        for tb in text_blocks:
             try:
-                translated = translator_fn(original_text)
+                translated = translator_fn(tb["text"])
             except Exception:
                 continue
-
             if not translated:
                 continue
 
-            # 获取块的边界框
-            bbox = fitz.Rect(block["bbox"])
+            bbox = fitz.Rect(tb["bbox"])
+            orig_size = tb["avg_size"]
+            is_title = orig_size >= body_size * _TITLE_SIZE_RATIO
 
-            # 获取原始字体大小（取第一个span的）
-            if spans_info:
-                orig_size = spans_info[0]["size"]
-                orig_color = spans_info[0].get("color", 0)
+            # 读取原始颜色
+            if tb["spans_info"]:
+                orig_color = tb["spans_info"][0].get("color", 0)
             else:
-                orig_size = 12
                 orig_color = 0
 
-            if bilingual:
-                # 双语模式：在原文下方添加译文
-                # 在块下方找空间插入译文
-                insert_y = bbox.y1 + 2
-                insert_rect = fitz.Rect(bbox.x0, insert_y, bbox.x1, insert_y + bbox.height)
+            if isinstance(orig_color, int):
+                r = ((orig_color >> 16) & 0xFF) / 255.0
+                g = ((orig_color >> 8) & 0xFF) / 255.0
+                b = (orig_color & 0xFF) / 255.0
+                color = (r, g, b)
+            else:
+                color = (0, 0, 0)
 
-                font_size = max(orig_size * 0.85, 6)  # 译文稍小
+            if bilingual:
+                insert_y = bbox.y1 + 2
+                insert_rect = fitz.Rect(
+                    bbox.x0, insert_y, bbox.x1, insert_y + bbox.height
+                )
+                font_size = max(orig_size * 0.85, 6)
                 _insert_text_in_rect(
                     page, insert_rect, translated,
                     font_size=font_size,
-                    color=(0, 0, 0.6),  # 蓝色区分
-                    cjk_font=cjk_font,
-                    cjk_fontname=cjk_fontname if use_builtin else None,
+                    color=(0, 0, 0.6),
+                    **font_kwargs,
                 )
             else:
-                # 替换模式：白色覆盖原文，插入译文
-                # 用白色矩形覆盖原文区域
+                # 白色覆盖原文
                 page.draw_rect(bbox, color=None, fill=(1, 1, 1))
 
-                # 计算合适的字号（中文通常比英文短，但每字更宽）
-                font_size = _calc_font_size(translated, bbox, orig_size)
-
-                # 将颜色从整数转为RGB元组
-                if isinstance(orig_color, int):
-                    r = ((orig_color >> 16) & 0xFF) / 255.0
-                    g = ((orig_color >> 8) & 0xFF) / 255.0
-                    b = (orig_color & 0xFF) / 255.0
-                    color = (r, g, b)
+                # 保持标题/正文的字号层级
+                if is_title:
+                    font_size = _calc_font_size(translated, bbox, orig_size)
+                    # 标题字号不能小于正文
+                    font_size = max(font_size, body_size * 0.95)
                 else:
-                    color = (0, 0, 0)
+                    font_size = _calc_font_size(translated, bbox, orig_size)
 
                 _insert_text_in_rect(
                     page, bbox, translated,
                     font_size=font_size,
                     color=color,
-                    cjk_font=cjk_font,
-                    cjk_fontname=cjk_fontname if use_builtin else None,
+                    **font_kwargs,
                 )
 
         if progress_callback:
             progress_callback(idx + 1, total)
 
+    # 删除空白页（倒序删除避免索引偏移）
+    if remove_empty and empty_pages:
+        for pn in sorted(empty_pages, reverse=True):
+            doc.delete_page(pn)
+
     doc.save(output_path, garbage=4, deflate=True)
     doc.close()
+
+    return {"empty_removed": len(empty_pages)}
+
+
+def _estimate_body_size(font_sizes: list[float]) -> float:
+    """估算正文基准字号（取出现频率最高的字号附近值）"""
+    if not font_sizes:
+        return 12.0
+    # 按字号分桶（四舍五入到整数）
+    buckets: dict[int, int] = {}
+    for s in font_sizes:
+        key = round(s)
+        buckets[key] = buckets.get(key, 0) + 1
+    # 取频率最高的桶
+    most_common = max(buckets, key=buckets.get)
+    return float(most_common)
 
 
 def _calc_font_size(text: str, rect: fitz.Rect, orig_size: float) -> float:
@@ -146,69 +199,36 @@ def _calc_font_size(text: str, rect: fitz.Rect, orig_size: float) -> float:
     width = rect.width
     height = rect.height
 
-    # 估算：中文每字大约占 font_size 宽度
     chars = len(text)
     chars_per_line = max(int(width / (orig_size * 0.7)), 1)
     lines_needed = max(1, (chars + chars_per_line - 1) // chars_per_line)
 
-    # 如果行数太多放不下，缩小字号
     line_height = orig_size * 1.3
     max_lines = max(int(height / line_height), 1)
 
     if lines_needed <= max_lines:
-        return orig_size * 0.9  # 稍微缩小以适应中文
+        return orig_size * 0.9
 
-    # 需要缩小字号
     ratio = max_lines / lines_needed
-    return max(orig_size * ratio * 0.9, 5)  # 最小5pt
+    return max(orig_size * ratio * 0.9, 5)
 
 
 def _insert_text_in_rect(
     page, rect, text, font_size, color, cjk_font=None, cjk_fontname=None
 ):
-    """在指定矩形区域内插入中文文本（自动换行）"""
-    try:
-        if cjk_fontname:
-            # 使用PyMuPDF内置CJK字体
-            rc = page.insert_textbox(
-                rect, text,
-                fontsize=font_size,
-                fontname=cjk_fontname,
-                color=color,
-                align=0,  # 左对齐
-            )
-        elif cjk_font:
-            # 使用外部字体文件
-            rc = page.insert_textbox(
-                rect, text,
-                fontsize=font_size,
-                fontfile=cjk_font,
-                fontname="CJK",
-                color=color,
-                align=0,
-            )
-        else:
-            # 回退：无中文字体
-            page.insert_textbox(
-                rect, text,
-                fontsize=font_size,
-                color=color,
-                align=0,
-            )
+    """在指定矩形区域内插入中文文本"""
+    kwargs = {"fontsize": font_size, "color": color, "align": 0}
+    if cjk_fontname:
+        kwargs["fontname"] = cjk_fontname
+    elif cjk_font:
+        kwargs["fontfile"] = cjk_font
+        kwargs["fontname"] = "CJK"
 
+    try:
+        page.insert_textbox(rect, text, **kwargs)
     except Exception:
-        # 如果插入失败，尝试更小的字号
         try:
-            smaller = max(font_size * 0.7, 4)
-            if cjk_fontname:
-                page.insert_textbox(
-                    rect, text,
-                    fontsize=smaller, fontname=cjk_fontname, color=color,
-                )
-            elif cjk_font:
-                page.insert_textbox(
-                    rect, text,
-                    fontsize=smaller, fontfile=cjk_font, fontname="CJK", color=color,
-                )
+            kwargs["fontsize"] = max(font_size * 0.7, 4)
+            page.insert_textbox(rect, text, **kwargs)
         except Exception:
-            pass  # 实在放不下就跳过
+            pass
