@@ -4,42 +4,14 @@ from __future__ import annotations
 import os
 from fpdf import FPDF
 
-
-# 支持中文的字体搜索路径
-_FONT_SEARCH_PATHS = [
-    # Linux
-    "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
-    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-    "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
-    "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
-    "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
-    "/usr/share/fonts/google-noto-cjk/NotoSansCJK-Regular.ttc",
-    # macOS
-    "/System/Library/Fonts/STHeiti Light.ttc",
-    "/System/Library/Fonts/PingFang.ttc",
-    "/Library/Fonts/Arial Unicode.ttf",
-    # Windows
-    "C:/Windows/Fonts/msyh.ttc",
-    "C:/Windows/Fonts/simsun.ttc",
-    "C:/Windows/Fonts/simhei.ttf",
-]
-
-
-def _find_cjk_font(custom_font: str | None = None) -> str | None:
-    """查找系统中可用的中文字体"""
-    if custom_font and os.path.isfile(custom_font):
-        return custom_font
-    for path in _FONT_SEARCH_PATHS:
-        if os.path.isfile(path):
-            return path
-    return None
+from pdf_translator.fonts import find_cjk_font
 
 
 class PDFWriter:
     """生成翻译后的PDF文件"""
 
     def __init__(self, font_path: str | None = None):
-        self.font_path = _find_cjk_font(font_path)
+        self.font_path = find_cjk_font(font_path)
 
     def write(
         self,

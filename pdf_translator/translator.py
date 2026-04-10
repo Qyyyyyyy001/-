@@ -89,16 +89,15 @@ class DeepLBackend(TranslatorBackend):
     """DeepL翻译后端（需要API密钥）"""
 
     def __init__(self, api_key: str):
-        self._api_key = api_key
+        from deep_translator import DeeplTranslator
+        self._translator = DeeplTranslator(
+            api_key=api_key, source="en", target="zh"
+        )
 
     def translate(self, text: str) -> str:
         if not text or not text.strip():
             return ""
-        from deep_translator import DeeplTranslator
-        translator = DeeplTranslator(
-            api_key=self._api_key, source="en", target="zh"
-        )
-        return translator.translate(text)
+        return self._translator.translate(text)
 
     def name(self) -> str:
         return "DeepL"
@@ -546,7 +545,6 @@ class BatchTranslator:
         return results
 
     def _translate_one(self, text: str, index: int) -> str:
-        """翻译单段文本，带延迟控制"""
-        if self.delay > 0:
-            time.sleep(self.delay * index * 0.1)  # 错开请求时间
+        if self.delay > 0 and index > 0:
+            time.sleep(self.delay * index)
         return self.backend.translate(text)

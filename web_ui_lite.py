@@ -472,13 +472,14 @@ class TranslationHandler(http.server.BaseHTTPRequestHandler):
             return
 
         filename = os.path.basename(filepath)
+        import shutil
         self.send_response(200)
         self.send_header("Content-Type", "application/octet-stream")
         self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
         self.send_header("Content-Length", str(os.path.getsize(filepath)))
         self.end_headers()
         with open(filepath, "rb") as f:
-            self.wfile.write(f.read())
+            shutil.copyfileobj(f, self.wfile)
 
     def _send_html(self, html):
         self.send_response(200)

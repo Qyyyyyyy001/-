@@ -182,7 +182,6 @@ def main():
     # 初始化检查点
     checkpoint_path = args.input + ".progress.json"
     checkpoint = Checkpoint(checkpoint_path)
-    checkpoint.set_metadata(args.input, total_pages, args.backend)
 
     # 断点续传：跳过已完成的页面
     if args.resume:
@@ -197,7 +196,8 @@ def main():
                 return
     else:
         checkpoint.clear()
-        checkpoint.set_metadata(args.input, total_pages, args.backend)
+
+    checkpoint.set_metadata(args.input, total_pages, args.backend)
 
     print(f"   待翻译: {len(page_range)} 页")
 
@@ -361,6 +361,7 @@ def run_overlay_mode(args):
         sys.exit(1)
 
     # 进度显示
+    progress_bar = None
     try:
         from tqdm import tqdm
         progress_bar = tqdm(total=end - start, desc="翻译进度", unit="页")
@@ -384,9 +385,9 @@ def run_overlay_mode(args):
         progress_callback=progress_cb,
     )
 
-    try:
+    if progress_bar:
         progress_bar.close()
-    except Exception:
+    else:
         print()
 
     elapsed = time.time() - start_time
