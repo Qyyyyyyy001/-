@@ -16,7 +16,7 @@
 | [`spacing.md`](./spacing.md) | 横向/纵向间距尺度 |
 | [`components/button.md`](./components/button.md) | 按钮组件：5 种类型 × 5 种状态 × 7 种尺寸 + 图标变体 |
 | [`components/checkbox.md`](./components/checkbox.md) | Checkbox / Radio / 半选状态组件 |
-| [`icons.md`](./icons.md) | 图标库说明：Header、Social Media、Currency、Currency Chain、Fiat |
+| [`icons.md`](./icons.md) | 图标库 · 7 个分组 370+ 个图标完整命名清单（Basic Product / Control / Header / Social / Crypto / Chain / Fiat） |
 
 ## 规范全局信息
 
@@ -29,12 +29,34 @@
   - `Text/*`、`Background/*`、`Line/*`、`Icon/*`、`Brand/*` 对应 Pay B 端语义化 token
   - `var(--color-*)` 对应 Web V5 的 CSS 变量名
 
-## Figma 顶层结构
+## 源 Figma 文件的 7 个页面
+
+| # | Canvas | Node ID | 内容 |
+| ---: | --- | --- | --- |
+| 1 | **基础组件** | `1:64` | 唯一有内容的页面。包含 Fonts / Color / Spacing / Button / Checkbox / 基础产品图标（~370 图标）/ Color_V5.1 Guidelines |
+| 2 | 全剧规范 | `43:317088` | （源文件中尚未填充） |
+| 3 | 通用组件 | `43:317089` | （源文件中尚未填充） |
+| 4 | 反馈组件 | `43:317090` | （源文件中尚未填充） |
+| 5 | 导航组件 | `43:317091` | （源文件中尚未填充） |
+| 6 | 数据展示 | `43:317092` | （源文件中尚未填充） |
+| 7 | 数据录入 | `43:317093` | （源文件中尚未填充） |
+
+## "基础组件" 页面内的组件区块
 
 | 区块 | Node ID | 尺寸 | 内容 |
 | --- | --- | --- | --- |
 | Fonts | `1:215` | 1687 × 2578 | 字体规范 |
-| Color | `1:393` | 1766 × 2578 | 颜色规范 + 图标库 |
+| Color | `1:393` | 1766 × 2578 | 颜色规范 |
 | Spacing | `33:296` | 1687 × 3228 | 间距规范 |
-| Button | `33:11329` | 5789 × 5550 | 按钮组件全量变体 |
+| Button | `33:11329` | 5789 × 5550 | 按钮组件全量变体：5 Type × 5 State × 7 Size × 4 Icon 变体 |
 | Checkbox | `33:14060` | 1200 × 5550 | 勾选/单选/半选组件 |
+| 基础产品图标 | `33:1971` | 2000 × 8830 | section，包含 7 大类 ~370 个图标 instance |
+
+## 目标 Figma 文件（本次会话生成）
+
+**<https://www.figma.com/design/oA8CbhQplvQVisCVpbUx0r>** · `Pay B 端设计系统 — 收款链接示例 (by Claude)`
+
+| 页面 | 内容 |
+| --- | --- |
+| `收款链接` | Gate Pay 收款链接 1280×800 应用页面 mockup + Button 7 Size × 5 Type × State 控件参考板 |
+| `Design System` | Colors / Typography / Spacing / Checkbox / Button State × Type 矩阵 / Button Icon 变体 / Icons 图标库（370+）|
