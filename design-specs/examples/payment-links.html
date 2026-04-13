@@ -1,0 +1,683 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Gate Pay · 收款链接 — Pay B 端设计系统示例</title>
+  <style>
+    /* ============================================================
+       Design tokens — 直接引自 design-specs/tokens.json
+       ============================================================ */
+    :root {
+      /* Color · text */
+      --color-text-text-primary:    #070808;
+      --color-text-text-table:      #4f4f4f;
+      --color-text-text-secondary:  #84888c;
+      --color-text-text-tertiary:   #a0a3a7;
+      --color-text-text-disable:    #c4c7ca;
+      --color-text-text-brand:      #0068ff;
+      --color-text-always-white:    #ffffff;
+      --color-text-always-black:    #070808;
+      --color-text-inverse-primary: #ffffff;
+
+      /* Color · background */
+      --color-bg-primary:     #ffffff;
+      --color-bg-secondary:   #fafafa;
+      --color-bg-tertiary:    #f2f3f4;
+      --color-bg-quaternary:  #dfe0e2;
+      --color-bg-mask:        #f2f3f4;
+
+      /* Color · line */
+      --color-line-border:        #f2f3f4;
+      --color-line-divider:       #f2f3f4;
+      --color-line-border-strong: #dfe0e2;
+
+      /* Color · icon */
+      --color-icon-icon-primary:   #303236;
+      --color-icon-icon-secondary: #484b51;
+      --color-icon-icon-tertiary:  #84888c;
+
+      /* Color · brand */
+      --color-brand-color:           #adf73e;
+      --color-brand-text:            #68ad00;
+      --color-brand-component-hover: #e6f4d2;
+
+      /* Color · function */
+      --color-function-success-bg:    #e5f9f3;
+      --color-function-success-text:  #089767;
+      --color-function-warning-bg:    #ffeaca;
+      --color-function-warning-text:  #f26500;
+      --color-function-failed-bg:     #ffebef;
+      --color-function-failed-text:   #ff2c58;
+      --color-function-info-bg:       #f5f6f7;
+      --color-function-info-text:     #84888c;
+      --color-function-trade-sell:    #f74b60;
+      --color-function-trade-sell-active: #d6364e;
+
+      /* Component · button */
+      --color-cmpt-button-primary:        #303236;
+      --color-cmpt-button-soft:           #f5f6f7;
+      --color-cmpt-button-soft-active:    #dfe0e2;
+      --color-cmpt-button-soft-disable:   #f5f6f7;
+
+      /* Spacing scale (Pay B 端 4px-base) */
+      --space-4:   4px;
+      --space-8:   8px;
+      --space-12:  12px;
+      --space-16:  16px;
+      --space-20:  20px;
+      --space-24:  24px;
+      --space-32:  32px;
+      --space-40:  40px;
+      --space-48:  48px;
+
+      /* Typography (PingFang SC + Nunito Sans + Switzer) */
+      --font-cn:    "PingFang SC", "Helvetica Neue", "Microsoft YaHei", sans-serif;
+      --font-en:    "Nunito Sans", "Helvetica Neue", sans-serif;
+      --font-web5:  "Switzer", "Nunito Sans", "PingFang SC", sans-serif;
+
+      /* Sizing */
+      --header-height:   48px;
+      --sidebar-width:   200px;
+      --radius-sm:       4px;
+      --radius-md:       6px;
+      --radius-lg:       8px;
+      --radius-pill:     999px;
+    }
+
+    /* Reset */
+    *,*::before,*::after { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; height: 100%; }
+    body {
+      font-family: var(--font-cn);
+      font-size: 14px;
+      line-height: 22px;
+      color: var(--color-text-text-primary);
+      background: var(--color-bg-secondary);
+      -webkit-font-smoothing: antialiased;
+    }
+    button { font: inherit; cursor: pointer; }
+
+    /* ============================================================
+       Layout
+       ============================================================ */
+    .app {
+      display: grid;
+      grid-template-rows: var(--header-height) 1fr;
+      min-height: 100vh;
+    }
+
+    /* ---------- Top bar ---------- */
+    .top-bar {
+      background: var(--color-text-always-black); /* deep header */
+      color: var(--color-text-always-white);
+      display: flex;
+      align-items: center;
+      padding: 0 var(--space-16);
+      gap: var(--space-16);
+      height: var(--header-height);
+    }
+    .top-bar__home {
+      width: 28px; height: 28px;
+      display: inline-flex; align-items: center; justify-content: center;
+      color: var(--color-text-always-white);
+      border-radius: var(--radius-sm);
+    }
+    .top-bar__brand {
+      display: inline-flex; align-items: center; gap: var(--space-8);
+      font-family: var(--font-web5);
+      font-weight: 600;
+    }
+    .top-bar__logo {
+      width: 22px; height: 22px;
+      display: inline-flex; align-items: center; justify-content: center;
+      color: #4ea7ff;
+    }
+    .top-bar__brand b { color: #fff; font-size: 16px; }
+    .top-bar__brand span { color: #4ea7ff; font-weight: 500; }
+    .top-bar__apps {
+      width: 28px; height: 28px;
+      display: inline-flex; align-items: center; justify-content: center;
+      color: var(--color-text-always-white);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+    }
+    .top-bar__spacer { flex: 1; }
+    .top-bar__actions {
+      display: flex; align-items: center; gap: var(--space-12);
+    }
+    .pill-recharge {
+      display: inline-flex; align-items: center;
+      padding: 4px var(--space-12);
+      background: #2b6cf6;
+      color: #fff;
+      border-radius: var(--radius-pill);
+      font-size: 12px;
+      line-height: 20px;
+      font-weight: 500;
+      border: none;
+    }
+    .icon-btn {
+      width: 28px; height: 28px;
+      display: inline-flex; align-items: center; justify-content: center;
+      color: var(--color-text-always-white);
+      background: transparent; border: 0; border-radius: var(--radius-sm);
+    }
+    .icon-btn:hover { background: rgba(255,255,255,.08); }
+
+    /* ---------- Body ---------- */
+    .body {
+      display: grid;
+      grid-template-columns: var(--sidebar-width) 1fr;
+      min-height: 0;
+    }
+
+    /* ---------- Sidebar ---------- */
+    .sidebar {
+      background: var(--color-bg-primary);
+      border-right: 1px solid var(--color-line-border);
+      padding: var(--space-8) var(--space-8);
+      font-size: 14px;
+    }
+    .nav { list-style: none; margin: 0; padding: 0; }
+    .nav__item {
+      display: flex;
+      align-items: center;
+      gap: var(--space-8);
+      padding: var(--space-8) var(--space-12);
+      border-radius: var(--radius-md);
+      color: var(--color-text-text-primary);
+      cursor: pointer;
+      user-select: none;
+      line-height: 22px;
+    }
+    .nav__item:hover { background: var(--color-bg-tertiary); }
+    .nav__item.is-open  { color: var(--color-text-text-primary); }
+    .nav__icon {
+      width: 16px; height: 16px;
+      display: inline-flex; align-items: center; justify-content: center;
+      color: var(--color-icon-icon-secondary);
+      flex-shrink: 0;
+    }
+    .nav__caret {
+      margin-left: auto;
+      color: var(--color-icon-icon-tertiary);
+      font-size: 10px;
+    }
+    .nav__sub { list-style: none; margin: 0; padding: 0 0 0 var(--space-24); }
+    .nav__sub .nav__item {
+      padding: var(--space-8) var(--space-12);
+      font-size: 14px;
+      color: var(--color-text-text-secondary);
+    }
+    .nav__sub .nav__item.is-active {
+      background: var(--color-bg-tertiary);
+      color: var(--color-text-text-primary);
+      font-weight: 500;
+    }
+
+    /* ---------- Main ---------- */
+    .main {
+      padding: var(--space-24) var(--space-24);
+      min-width: 0;
+    }
+    .page-card {
+      background: var(--color-bg-primary);
+      border-radius: var(--radius-lg);
+      padding: var(--space-24);
+      min-height: calc(100vh - var(--header-height) - var(--space-24) * 2);
+      box-shadow: 0 1px 0 rgba(0,0,0,0.02);
+    }
+    .page-header {
+      display: flex; align-items: center;
+      margin-bottom: var(--space-20);
+    }
+    .page-title {
+      font-size: 20px;
+      line-height: 28px;
+      font-weight: 600;
+      margin: 0;
+      color: var(--color-text-text-primary);
+    }
+    .page-actions { margin-left: auto; display: flex; gap: var(--space-12); }
+
+    /* ============================================================
+       Components — Button (基于 Pay B 端设计系统)
+       ============================================================ */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      gap: var(--space-8);
+      border: 0;
+      border-radius: var(--radius-md);
+      font-family: var(--font-cn);
+      font-weight: 500;
+      cursor: pointer;
+      transition: background .12s ease, color .12s ease;
+      white-space: nowrap;
+    }
+    /* size: small-36 */
+    .btn--sm   { height: 36px; padding: 0 var(--space-16); font-size: 14px; line-height: 22px; }
+    /* size: xsmall-32 */
+    .btn--xs   { height: 32px; padding: 0 var(--space-12); font-size: 14px; line-height: 22px; }
+
+    /* type=Primary-Black */
+    .btn--primary {
+      background: var(--color-cmpt-button-primary);
+      color: var(--color-text-inverse-primary);
+    }
+    .btn--primary:hover { background: #1f2023; }
+
+    /* type=Secondary-Gray (Soft) */
+    .btn--soft {
+      background: var(--color-cmpt-button-soft);
+      color: var(--color-text-text-primary);
+    }
+    .btn--soft:hover { background: var(--color-cmpt-button-soft-active); }
+
+    /* === 业务定制：示例图里的两个蓝色 CTA 用品牌蓝（Brand-6） === */
+    .btn--brand {
+      background: #387cf2;
+      color: #fff;
+    }
+    .btn--brand:hover { background: #2d4ed4; }
+
+    /* type=Link (text button) — 表格内常用 */
+    .btn--link {
+      background: transparent;
+      color: var(--color-text-text-brand);
+      padding: 0;
+      height: auto;
+      line-height: 22px;
+      font-weight: 500;
+    }
+    .btn--link:hover { color: #2d4ed4; }
+    .btn--link.is-danger { color: var(--color-function-failed-text); }
+    .btn--link.is-danger:hover { color: var(--color-function-trade-sell-active); }
+
+    /* ============================================================
+       Components — Table
+       ============================================================ */
+    .table-wrap {
+      border: 1px solid var(--color-line-border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }
+    table.tbl {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    .tbl thead th {
+      background: var(--color-bg-secondary);
+      color: var(--color-text-text-secondary);
+      font-weight: 400;
+      text-align: left;
+      padding: var(--space-12) var(--space-16);
+      font-size: 12px;
+      line-height: 20px;
+      border-bottom: 1px solid var(--color-line-border);
+      white-space: nowrap;
+    }
+    .tbl tbody td {
+      padding: var(--space-20) var(--space-16);
+      color: var(--color-text-text-table);
+      border-bottom: 1px solid var(--color-line-border);
+      font-size: 14px;
+      line-height: 22px;
+      vertical-align: middle;
+    }
+    .tbl tbody tr:last-child td { border-bottom: 0; }
+    .tbl tbody tr:hover td { background: var(--color-bg-secondary); }
+
+    .col-num   { width: 48px;  color: var(--color-text-text-tertiary); }
+    .col-link  { max-width: 240px; }
+    .col-amount{ font-weight: 500; color: var(--color-text-text-primary); white-space: nowrap; }
+    .col-actions { white-space: nowrap; }
+
+    .link-cell {
+      display: inline-flex; align-items: center; gap: var(--space-8);
+      max-width: 220px;
+      color: var(--color-text-text-table);
+    }
+    .link-cell__text {
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .copy-icon {
+      color: var(--color-icon-icon-tertiary);
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .copy-icon:hover { color: var(--color-icon-icon-primary); }
+
+    /* ============================================================
+       Components — Status text (借用功能色 token)
+       ============================================================ */
+    .status-success { color: var(--color-function-success-text); }
+    .status-warning { color: var(--color-function-warning-text); }
+    .status-info    { color: var(--color-text-text-secondary); }
+
+    /* ============================================================
+       Annotation — 红箭头说明 (来自原始截图的设计标注)
+       ============================================================ */
+    .annotation {
+      position: relative;
+    }
+    .annotation__label {
+      position: absolute;
+      top: -28px;
+      right: 56px;
+      color: var(--color-function-failed-text);
+      font-size: 12px;
+      line-height: 20px;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+    .annotation__arrow {
+      position: absolute;
+      top: -10px;
+      right: 36px;
+      color: var(--color-function-failed-text);
+      font-size: 14px;
+      transform: rotate(15deg);
+    }
+
+    /* ============================================================
+       Floating help bubble
+       ============================================================ */
+    .help-fab {
+      position: fixed;
+      right: var(--space-24);
+      bottom: var(--space-24);
+      width: 44px; height: 44px;
+      border-radius: var(--radius-pill);
+      background: #2b6cf6;
+      color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 6px 16px rgba(43,108,246,.32);
+      cursor: pointer;
+      border: 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+
+    <!-- ========================================================
+         Top bar
+         ======================================================== -->
+    <header class="top-bar">
+      <span class="top-bar__home" aria-label="home">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <path d="M2 7.2 8 2l6 5.2V13a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V7.2Z" stroke="currentColor" stroke-width="1.4"/>
+        </svg>
+      </span>
+      <span style="opacity:.4;">|</span>
+      <span class="top-bar__brand">
+        <span class="top-bar__logo">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+            <circle cx="10" cy="10" r="9" stroke="currentColor" stroke-width="1.6" fill="none"/>
+            <path d="M10 5v5h5" stroke="currentColor" stroke-width="1.6" fill="none"/>
+          </svg>
+        </span>
+        <b>Gate</b><span>Pay</span>
+      </span>
+      <span class="top-bar__apps" aria-label="apps">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+          <rect x="1" y="1" width="4" height="4" rx="1"/><rect x="9" y="1" width="4" height="4" rx="1"/>
+          <rect x="1" y="9" width="4" height="4" rx="1"/><rect x="9" y="9" width="4" height="4" rx="1"/>
+        </svg>
+      </span>
+
+      <span class="top-bar__spacer"></span>
+
+      <div class="top-bar__actions">
+        <button class="pill-recharge">充值</button>
+        <button class="icon-btn" aria-label="help">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.4"/>
+            <path d="M6.5 6.4a1.5 1.5 0 1 1 2 1.4c-.6.2-.9.6-.9 1.2v.3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+            <circle cx="8" cy="11.2" r=".7" fill="currentColor"/>
+          </svg>
+        </button>
+        <button class="icon-btn" aria-label="notifications">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M3.5 12.5h9l-1-1.6V7a3.5 3.5 0 0 0-7 0v3.9l-1 1.6Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+            <path d="M6.5 13.5a1.5 1.5 0 0 0 3 0" stroke="currentColor" stroke-width="1.4"/>
+          </svg>
+        </button>
+        <button class="icon-btn" aria-label="profile">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <circle cx="8" cy="6" r="2.5" stroke="currentColor" stroke-width="1.4"/>
+            <path d="M3 13c.8-2.2 2.7-3.4 5-3.4s4.2 1.2 5 3.4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          </svg>
+        </button>
+        <button class="icon-btn" aria-label="theme">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M13 9.4A5.5 5.5 0 1 1 6.6 3a4.5 4.5 0 0 0 6.4 6.4Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <button class="icon-btn" aria-label="lang">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.4"/>
+            <path d="M1.5 8h13M8 1.5c2 2 2 11 0 13M8 1.5c-2 2-2 11 0 13" stroke="currentColor" stroke-width="1.4"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- ========================================================
+         Body: sidebar + main
+         ======================================================== -->
+    <div class="body">
+
+      <!-- ---------- Sidebar ---------- -->
+      <aside class="sidebar">
+        <ul class="nav">
+          <li class="nav__item"><span class="nav__icon">▦</span>开始使用</li>
+          <li class="nav__item"><span class="nav__icon">⊞</span>商家管理平台</li>
+          <li class="nav__item">
+            <span class="nav__icon">≡</span>交易订单
+            <span class="nav__caret">▾</span>
+          </li>
+          <li class="nav__item is-open">
+            <span class="nav__icon">⛓</span>收款
+            <span class="nav__caret">▴</span>
+          </li>
+          <ul class="nav__sub">
+            <li class="nav__item is-active"><span class="nav__icon">🔗</span>收款链接</li>
+            <li class="nav__item"><span class="nav__icon">▦</span>静态收款码</li>
+          </ul>
+          <li class="nav__item"><span class="nav__icon">◉</span>账户</li>
+          <li class="nav__item"><span class="nav__icon">⚙</span>智能管理</li>
+          <li class="nav__item"><span class="nav__icon">⚒</span>开发者中心</li>
+          <li class="nav__item"><span class="nav__icon">¤</span>支付币种配置</li>
+          <li class="nav__item"><span class="nav__icon">🎁</span>礼品卡</li>
+          <li class="nav__item"><span class="nav__icon">⚐</span>角色权限管理</li>
+          <li class="nav__item"><span class="nav__icon">☎</span>客户管理</li>
+          <li class="nav__item"><span class="nav__icon">▥</span>白标收银台设置</li>
+        </ul>
+      </aside>
+
+      <!-- ---------- Main ---------- -->
+      <main class="main">
+        <section class="page-card">
+          <div class="page-header">
+            <h1 class="page-title">收款链接</h1>
+            <div class="page-actions">
+              <button class="btn btn--sm btn--brand">客户渠道</button>
+              <button class="btn btn--sm btn--brand">新增</button>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table class="tbl">
+              <thead>
+                <tr>
+                  <th class="col-num">序号</th>
+                  <th>客户渠道</th>
+                  <th>创建日期</th>
+                  <th>产品名称</th>
+                  <th>支付链接</th>
+                  <th>订单金额</th>
+                  <th>二维码状态</th>
+                  <th class="annotation">
+                    付款按钮
+                    <span class="annotation__label">付款按钮</span>
+                    <span class="annotation__arrow">↘</span>
+                  </th>
+                  <th class="col-actions"></th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- row 1 -->
+                <tr>
+                  <td class="col-num">1</td>
+                  <td>test</td>
+                  <td>2025-04-01 10:04:39</td>
+                  <td>永久</td>
+                  <td class="col-link">
+                    <span class="link-cell">
+                      <span class="link-cell__text">https://www.gate.io/pay-code?qrcod...</span>
+                      <span class="copy-icon" title="复制">⎘</span>
+                    </span>
+                  </td>
+                  <td class="col-amount">1 USDT</td>
+                  <td class="status-success">有效（永久有效）</td>
+                  <td><button class="btn btn--link">查看二维码</button></td>
+                  <td class="col-actions"><button class="btn btn--link is-danger">删除</button></td>
+                </tr>
+                <!-- row 2 -->
+                <tr>
+                  <td class="col-num">2</td>
+                  <td>test</td>
+                  <td>2025-03-27 18:29:50</td>
+                  <td>test111</td>
+                  <td class="col-link">
+                    <span class="link-cell">
+                      <span class="link-cell__text">https://www.gate.io/pay-code?qrcod...</span>
+                      <span class="copy-icon">⎘</span>
+                    </span>
+                  </td>
+                  <td class="col-amount">33 USDT</td>
+                  <td class="status-info">无效（24小时有效）</td>
+                  <td><button class="btn btn--link">查看二维码</button></td>
+                  <td class="col-actions"><button class="btn btn--link is-danger">删除</button></td>
+                </tr>
+                <!-- row 3 -->
+                <tr>
+                  <td class="col-num">3</td>
+                  <td>test</td>
+                  <td>2025-03-26 12:19:14</td>
+                  <td>111</td>
+                  <td class="col-link">
+                    <span class="link-cell">
+                      <span class="link-cell__text">https://www.gate.io/pay-code?qrcod...</span>
+                      <span class="copy-icon">⎘</span>
+                    </span>
+                  </td>
+                  <td class="col-amount">12 USDT</td>
+                  <td class="status-info">无效（24小时有效）</td>
+                  <td><button class="btn btn--link">查看二维码</button></td>
+                  <td class="col-actions"><button class="btn btn--link is-danger">删除</button></td>
+                </tr>
+                <!-- row 4 -->
+                <tr>
+                  <td class="col-num">4</td>
+                  <td>test</td>
+                  <td>2025-03-25 12:11:36</td>
+                  <td>test11</td>
+                  <td class="col-link">
+                    <span class="link-cell">
+                      <span class="link-cell__text">https://www.gate.io/pay-code?qrcod...</span>
+                      <span class="copy-icon">⎘</span>
+                    </span>
+                  </td>
+                  <td class="col-amount">1.1 USDT</td>
+                  <td class="status-info">无效（24小时有效）</td>
+                  <td><button class="btn btn--link">查看二维码</button></td>
+                  <td class="col-actions"><button class="btn btn--link is-danger">删除</button></td>
+                </tr>
+                <!-- row 5 -->
+                <tr>
+                  <td class="col-num">5</td>
+                  <td>test</td>
+                  <td>2025-03-24 12:01:09</td>
+                  <td>test2</td>
+                  <td class="col-link">
+                    <span class="link-cell">
+                      <span class="link-cell__text">https://www.gate.io/pay-code?qrcod...</span>
+                      <span class="copy-icon">⎘</span>
+                    </span>
+                  </td>
+                  <td class="col-amount">3 USDT</td>
+                  <td class="status-info">无效（24小时有效）</td>
+                  <td><button class="btn btn--link">查看二维码</button></td>
+                  <td class="col-actions"><button class="btn btn--link is-danger">删除</button></td>
+                </tr>
+                <!-- row 6 -->
+                <tr>
+                  <td class="col-num">6</td>
+                  <td>test</td>
+                  <td>2025-03-24 08:44:15</td>
+                  <td>test1</td>
+                  <td class="col-link">
+                    <span class="link-cell">
+                      <span class="link-cell__text">https://www.gate.io/pay-code?qrcod...</span>
+                      <span class="copy-icon">⎘</span>
+                    </span>
+                  </td>
+                  <td class="col-amount">1 USDT</td>
+                  <td class="status-info">无效（1小时有效）</td>
+                  <td><button class="btn btn--link">查看二维码</button></td>
+                  <td class="col-actions"><button class="btn btn--link is-danger">删除</button></td>
+                </tr>
+                <!-- row 7 -->
+                <tr>
+                  <td class="col-num">7</td>
+                  <td>test</td>
+                  <td>2025-03-20 22:50:43</td>
+                  <td>1</td>
+                  <td class="col-link">
+                    <span class="link-cell">
+                      <span class="link-cell__text">https://www.gate.io/pay-code?qrcod...</span>
+                      <span class="copy-icon">⎘</span>
+                    </span>
+                  </td>
+                  <td class="col-amount">0.88 USDT</td>
+                  <td class="status-info">无效（1小时有效）</td>
+                  <td><button class="btn btn--link">查看二维码</button></td>
+                  <td class="col-actions"><button class="btn btn--link is-danger">删除</button></td>
+                </tr>
+                <!-- row 8 -->
+                <tr>
+                  <td class="col-num">8</td>
+                  <td>test</td>
+                  <td>2025-03-20 18:59:36</td>
+                  <td></td>
+                  <td class="col-link">
+                    <span class="link-cell">
+                      <span class="link-cell__text">https://www.gate.io/pay-code?qrcod...</span>
+                      <span class="copy-icon">⎘</span>
+                    </span>
+                  </td>
+                  <td class="col-amount">1 USDT</td>
+                  <td class="status-info">无效（1小时有效）</td>
+                  <td><button class="btn btn--link">查看二维码</button></td>
+                  <td class="col-actions"><button class="btn btn--link is-danger">删除</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <!-- Floating help bubble -->
+  <button class="help-fab" aria-label="客服">
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+      <path d="M4 8a6 6 0 1 1 12 0v2a6 6 0 0 1-6 6H7l-3 2v-3a6 6 0 0 1 0-7Z" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/>
+    </svg>
+  </button>
+</body>
+</html>
