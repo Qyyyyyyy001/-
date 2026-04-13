@@ -56,7 +56,8 @@
 
 **<https://www.figma.com/design/oA8CbhQplvQVisCVpbUx0r>** · `Pay B 端设计系统 — 收款链接示例 (by Claude)`
 
-| 页面 | 内容 |
-| --- | --- |
-| `收款链接` | Gate Pay 收款链接 1280×800 应用页面 mockup + Button 7 Size × 5 Type × State 控件参考板 |
-| `Design System` | Colors / Typography / Spacing / Checkbox / Button State × Type 矩阵 / Button Icon 变体 / Icons 图标库（370+）|
+| 页面 | Node ID | 内容 |
+| --- | --- | --- |
+| `收款链接` | `0:1` | Gate Pay 收款链接 1280×800 应用页面 mockup + Button 7 Size × 5 Type × State 控件参考板 |
+| `Design System` | `5:2` | Colors / Typography / Spacing / Checkbox 板 + Button State × Type 矩阵板 + Icon 变体板 + Icons 图标库（370+）|
+| `Component Library` | `24:2` | **34 个组件板**：Tag · Badge · Switch · Divider · Input/Textarea · Select · Alert/Toast · Modal · Tooltip · Tabs · Pagination · Steps · Breadcrumb · Table · Avatar · Loading · Empty · Search · Slider · Rate · Upload · Date/Time Picker · Number Input · Banner · Collapse · Countdown · Description · Coin Title · Anchor · Announcement · Carousel · Image states · 404 Error · Header + Left Menu |
