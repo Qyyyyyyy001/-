@@ -1,0 +1,56 @@
+{
+  "$source": {
+    "figmaFile": "vCt8aPJKNCIrvkAo1nLph7",
+    "figmaName": "Pay-B端 组件规范 - Yang",
+    "rootCanvas": "1:64",
+    "exportedAt": "2026-04-13",
+    "exportedVia": "Figma MCP get_screenshot"
+  },
+  "exports": [
+    {
+      "name": "Fonts",
+      "nodeId": "1:215",
+      "size": { "width": 1687, "height": 2578 },
+      "figmaUrl": "https://www.figma.com/design/vCt8aPJKNCIrvkAo1nLph7/Pay-B%E7%AB%AF-%E7%BB%84%E4%BB%B6%E8%A7%84%E8%8C%83---Yang?node-id=1-215",
+      "imageUrl": "https://api.figma.com/v1/images/vCt8aPJKNCIrvkAo1nLph7?ids=1:215&format=png&scale=2",
+      "filename": "fonts.png",
+      "spec": "../typography.md"
+    },
+    {
+      "name": "Color",
+      "nodeId": "1:393",
+      "size": { "width": 1766, "height": 2578 },
+      "figmaUrl": "https://www.figma.com/design/vCt8aPJKNCIrvkAo1nLph7/Pay-B%E7%AB%AF-%E7%BB%84%E4%BB%B6%E8%A7%84%E8%8C%83---Yang?node-id=1-393",
+      "imageUrl": "https://api.figma.com/v1/images/vCt8aPJKNCIrvkAo1nLph7?ids=1:393&format=png&scale=2",
+      "filename": "color.png",
+      "spec": "../colors.md"
+    },
+    {
+      "name": "Spacing",
+      "nodeId": "33:296",
+      "size": { "width": 1687, "height": 3228 },
+      "figmaUrl": "https://www.figma.com/design/vCt8aPJKNCIrvkAo1nLph7/Pay-B%E7%AB%AF-%E7%BB%84%E4%BB%B6%E8%A7%84%E8%8C%83---Yang?node-id=33-296",
+      "imageUrl": "https://api.figma.com/v1/images/vCt8aPJKNCIrvkAo1nLph7?ids=33:296&format=png&scale=2",
+      "filename": "spacing.png",
+      "spec": "../spacing.md"
+    },
+    {
+      "name": "Button",
+      "nodeId": "33:11329",
+      "size": { "width": 5789, "height": 5550 },
+      "figmaUrl": "https://www.figma.com/design/vCt8aPJKNCIrvkAo1nLph7/Pay-B%E7%AB%AF-%E7%BB%84%E4%BB%B6%E8%A7%84%E8%8C%83---Yang?node-id=33-11329",
+      "imageUrl": "https://api.figma.com/v1/images/vCt8aPJKNCIrvkAo1nLph7?ids=33:11329&format=png&scale=2",
+      "filename": "button.png",
+      "spec": "../components/button.md"
+    },
+    {
+      "name": "Checkbox",
+      "nodeId": "33:14060",
+      "size": { "width": 1200, "height": 5550 },
+      "figmaUrl": "https://www.figma.com/design/vCt8aPJKNCIrvkAo1nLph7/Pay-B%E7%AB%AF-%E7%BB%84%E4%BB%B6%E8%A7%84%E8%8C%83---Yang?node-id=33-14060",
+      "imageUrl": "https://api.figma.com/v1/images/vCt8aPJKNCIrvkAo1nLph7?ids=33:14060&format=png&scale=2",
+      "filename": "checkbox.png",
+      "spec": "../components/checkbox.md"
+    }
+  ]
+}
