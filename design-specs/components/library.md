@@ -87,12 +87,13 @@
 
 Figma Plugin API 里 `createInstance()` 生成的 INSTANCE 节点对子 Text 做 `characters` 覆写时，虽然 API 层面看起来成功（inspect 能读到新值、fills 正确），但实际画布渲染会把文字变成不可见/截断。使用 `component.clone()` 生成一个普通的 FRAME 副本，可以自由修改子节点，渲染正常。代价是失去了"instance → 跟随 master 更新"的能力，但对这次复刻页面来说足够好。
 
-### Target Figma 文件的 4 个页面
+### Target Figma 文件的 5 个页面
 
 | 页面 | Node ID | 说明 |
 | --- | --- | --- |
 | `收款链接` | `0:1` | v1 —— 原始硬编码版（所有样式直接写死） |
 | `Design System` | `5:2` | 设计 token + Button/Checkbox/Icons 参考板 |
 | `Component Library` | `24:2` | 34 个组件参考板 + `__COMPONENTS_SOURCE__` 隐藏容器（6 个 Component 源） |
-| **`收款链接 (Components v2)`** | `49:2` | **v2 —— 使用 Component clone 的版本**，按钮/Tag/Link 都是从 Component 源复制出来的 |
+| `收款链接 (Components v2)` | `49:2` | v2 —— 使用 Component clone 的版本，按钮/Tag/Link 都是从 Component 源复制出来的 |
+| **`Payment Dashboard (v1)`** | `55:2` | **Payment 仪表盘 1:1 复刻**：Sidebar + 4 KPI cards + 筛选条 + 表格 7 列 × 6 行（6 种状态 Tag：Pending/Expired/Successful/Canceled/Failed/Payment Abnormal）+ Action 菜单浮层 |
 
