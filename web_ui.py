@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-PDF翻译工具 - Web 界面
+PDF翻译工具 - Web 界面 (Gradio + Apple Design System)
 启动: python web_ui.py
 浏览器打开: http://localhost:7860
 """
@@ -16,6 +16,120 @@ from pdf_translator.extractor import get_page_count, extract_pages_batch
 from pdf_translator.translator import create_backend, BatchTranslator
 from pdf_translator.writer import create_writer
 from pdf_translator.checkpoint import Checkpoint
+from pdf_translator.apple_design_system import APPLE_CSS, gradio_theme
+
+
+# ---- Apple-styled CSS overrides that target Gradio's DOM ----
+# The shared APPLE_CSS defines tokens & primitives; these selectors
+# apply them to Gradio's generated markup.
+GRADIO_APPLE_CSS = """
+.gradio-container {
+    font-family: var(--font-sans) !important;
+    background: var(--bg-primary) !important;
+    color: var(--text-primary) !important;
+    max-width: 1100px !important;
+    margin: 0 auto !important;
+}
+.gradio-container h1,
+.gradio-container h2,
+.gradio-container h3 {
+    font-family: var(--font-sans) !important;
+    letter-spacing: -0.3px !important;
+    color: var(--text-primary) !important;
+}
+.gradio-container h1 {
+    font-size: var(--text-large-title) !important;
+    font-weight: 700 !important;
+    background: linear-gradient(135deg, var(--text-primary) 0%, #424245 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+.gradio-container .block,
+.gradio-container .form,
+.gradio-container .gradio-group {
+    background: var(--bg-secondary) !important;
+    border-radius: var(--radius-lg) !important;
+    box-shadow: var(--shadow-sm) !important;
+    border: 0.5px solid var(--separator) !important;
+}
+.gradio-container label,
+.gradio-container .block-title {
+    font-family: var(--font-sans) !important;
+    font-weight: 600 !important;
+    color: var(--text-secondary) !important;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-size: var(--text-footnote) !important;
+}
+.gradio-container input,
+.gradio-container textarea,
+.gradio-container select,
+.gradio-container .gr-box {
+    font-family: var(--font-sans) !important;
+    background: var(--bg-tertiary) !important;
+    border: none !important;
+    border-radius: var(--radius-sm) !important;
+    color: var(--text-primary) !important;
+    transition: background var(--duration-base) var(--ease-standard),
+                box-shadow var(--duration-base) var(--ease-standard) !important;
+}
+.gradio-container input:focus,
+.gradio-container textarea:focus,
+.gradio-container select:focus {
+    background: var(--bg-secondary) !important;
+    box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.2) !important;
+    outline: none !important;
+}
+.gradio-container button.primary,
+.gradio-container .gr-button-primary {
+    background: var(--accent) !important;
+    color: #fff !important;
+    border: none !important;
+    border-radius: var(--radius-md) !important;
+    font-weight: 600 !important;
+    font-size: var(--text-headline) !important;
+    letter-spacing: -0.2px !important;
+    box-shadow: var(--shadow-sm) !important;
+    transition: all var(--duration-fast) var(--ease-standard) !important;
+}
+.gradio-container button.primary:hover,
+.gradio-container .gr-button-primary:hover {
+    background: var(--accent-hover) !important;
+    box-shadow: var(--shadow-md) !important;
+    transform: translateY(-1px);
+}
+.gradio-container button.secondary,
+.gradio-container .gr-button-secondary {
+    background: var(--bg-tertiary) !important;
+    color: var(--accent) !important;
+    border-radius: var(--radius-md) !important;
+    border: none !important;
+    font-weight: 600 !important;
+}
+.gradio-container .progress-bar,
+.gradio-container progress::-webkit-progress-value {
+    background: linear-gradient(90deg, #007aff, #5ac8fa) !important;
+    border-radius: var(--radius-full) !important;
+}
+.gradio-container .markdown-body,
+.gradio-container .prose {
+    font-family: var(--font-sans) !important;
+    color: var(--text-primary) !important;
+}
+.gradio-container .gr-file,
+.gradio-container .file-preview {
+    background: var(--bg-tertiary) !important;
+    border: 2px dashed var(--separator) !important;
+    border-radius: var(--radius-md) !important;
+    transition: all var(--duration-base) var(--ease-standard);
+}
+.gradio-container .gr-file:hover,
+.gradio-container .file-preview:hover {
+    border-color: var(--accent) !important;
+    background: #f0f5ff !important;
+}
+"""
 
 
 def get_pdf_info(file_path):
@@ -153,8 +267,15 @@ def translate_pdf(
 
 
 def build_ui():
-    with gr.Blocks(title="PDF翻译工具 - 英译中") as app:
-        gr.Markdown("# PDF 翻译工具\n**支持大型PDF (800+页) 英文翻译为中文**")
+    theme = gradio_theme() or gr.themes.Soft()
+    combined_css = APPLE_CSS + "\n" + GRADIO_APPLE_CSS
+
+    with gr.Blocks(
+        title="PDF翻译工具 - 英译中",
+        theme=theme,
+        css=combined_css,
+    ) as app:
+        gr.Markdown("# PDF 翻译工具\n**支持大型 PDF (800+ 页) 英文翻译为中文** · Apple Design System")
 
         with gr.Row():
             # ---- 左栏：设置 ----
@@ -243,5 +364,4 @@ if __name__ == "__main__":
         server_name="0.0.0.0",
         server_port=7860,
         share=True,
-        theme=gr.themes.Soft(),
     )

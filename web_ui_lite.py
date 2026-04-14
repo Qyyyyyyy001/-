@@ -3,6 +3,11 @@
 PDF翻译工具 - 轻量Web界面（零额外依赖，用Python自带http.server）
 启动: python3 web_ui_lite.py
 浏览器打开: http://localhost:7860
+
+UI 使用苹果设计系统 (apple_design_system.py / apple_design_system.css)：
+    - SF Pro 字体栈 + iOS 类型级
+    - 系统色板 + 深/浅色模式
+    - 圆角 / 阴影 / 4pt 间距网格
 """
 
 import http.server
@@ -18,6 +23,7 @@ import urllib.parse
 from pdf_translator.extractor import get_page_count
 from pdf_translator.translator import create_backend
 from pdf_translator.overlay import translate_pdf_inplace
+from pdf_translator.apple_design_system import APPLE_CSS
 
 # 全局翻译状态
 translation_state = {
@@ -30,108 +36,62 @@ translation_state = {
     "error": None,
 }
 
-HTML_PAGE = """<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PDF Translator</title>
-<style>
-/* === Apple HIG: System Font Stack, Spacing, Radius === */
-:root {
-    --bg-primary: #f5f5f7;
-    --bg-secondary: #ffffff;
-    --bg-tertiary: #f2f2f7;
-    --text-primary: #1d1d1f;
-    --text-secondary: #86868b;
-    --text-tertiary: #aeaeb2;
-    --accent: #0071e3;
-    --accent-hover: #0077ed;
-    --accent-active: #006edb;
-    --green: #34c759;
-    --green-bg: #f0faf3;
-    --separator: rgba(60,60,67,0.12);
-    --shadow-sm: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.06);
-    --shadow-md: 0 4px 14px rgba(0,0,0,0.06), 0 2px 6px rgba(0,0,0,0.04);
-    --shadow-lg: 0 8px 28px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.04);
-    --radius-sm: 8px;
-    --radius-md: 12px;
-    --radius-lg: 16px;
-    --radius-xl: 20px;
-    --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
-             "Helvetica Neue", "PingFang SC", "Microsoft YaHei", sans-serif;
-    --font-mono: "SF Mono", SFMono-Regular, ui-monospace, Menlo, Monaco, monospace;
-}
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: var(--font); background: var(--bg-primary); color: var(--text-primary);
-       min-height: 100vh; -webkit-font-smoothing: antialiased; }
-
-/* === Layout === */
-.app-header { text-align: center; padding: 48px 20px 32px; }
-.app-header h1 { font-size: 34px; font-weight: 700; letter-spacing: -0.5px;
-                  background: linear-gradient(135deg, var(--text-primary) 0%, #424245 100%);
-                  -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-.app-header p { font-size: 17px; color: var(--text-secondary); margin-top: 8px;
-                font-weight: 400; letter-spacing: -0.2px; }
-.container { max-width: 680px; margin: 0 auto; padding: 0 20px 60px; }
-
-/* === Card (Apple grouped-style) === */
-.card { background: var(--bg-secondary); border-radius: var(--radius-lg);
-        padding: 20px; margin-bottom: 16px; box-shadow: var(--shadow-sm); }
-.card-title { font-size: 13px; font-weight: 600; color: var(--text-secondary);
-              text-transform: uppercase; letter-spacing: 0.5px; padding: 0 4px;
-              margin-bottom: 12px; }
-
-/* === Form Elements (Apple native feel) === */
-.form-row { display: flex; align-items: center; padding: 11px 0;
-            border-bottom: 0.5px solid var(--separator); }
-.form-row:last-child { border-bottom: none; }
-.form-row label { flex: 0 0 90px; font-size: 15px; color: var(--text-primary); font-weight: 400; }
-.form-row .input-wrap { flex: 1; display: flex; justify-content: flex-end; }
-.form-row select, .form-row input[type="number"], .form-row input[type="password"] {
-    font-family: var(--font); font-size: 15px; color: var(--text-primary);
-    background: var(--bg-tertiary); border: none; border-radius: var(--radius-sm);
-    padding: 8px 12px; outline: none; text-align: right; width: 100%;
-    transition: background 0.2s; -webkit-appearance: none; }
-.form-row select { padding-right: 28px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5L6 7.5L9 4.5' stroke='%2386868b' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
-    background-repeat: no-repeat; background-position: right 10px center; text-align: left; }
-.form-row input:focus, .form-row select:focus { background: #e8e8ed; }
-.form-row input[type="number"] { width: 80px; text-align: center; }
-
-/* === Toggle Switch (Apple style) === */
-.toggle { position: relative; width: 51px; height: 31px; flex-shrink: 0; }
-.toggle input { opacity: 0; width: 0; height: 0; }
-.toggle .slider { position: absolute; inset: 0; background: #e9e9eb; border-radius: 31px;
-                  cursor: pointer; transition: background 0.25s; }
-.toggle .slider::before { content: ""; position: absolute; width: 27px; height: 27px;
-    left: 2px; top: 2px; background: white; border-radius: 50%; transition: transform 0.25s;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.15); }
-.toggle input:checked + .slider { background: var(--green); }
-.toggle input:checked + .slider::before { transform: translateX(20px); }
-
-/* === Upload Area === */
+# ---- 页面局部样式（只覆盖 Apple 设计系统未涉及的页面特定细节）----
+PAGE_STYLES = """
+/* Upload area — hover state & icon */
 .upload-area { border: 2px dashed var(--separator); border-radius: var(--radius-md);
                padding: 36px 20px; text-align: center; cursor: pointer;
-               transition: all 0.3s ease; background: var(--bg-tertiary); }
+               transition: all var(--duration-base) var(--ease-standard);
+               background: var(--bg-tertiary); }
 .upload-area:hover { border-color: var(--accent); background: #f0f5ff; }
-.upload-area.has-file { border-color: var(--green); background: var(--green-bg);
+.upload-area.has-file { border-color: var(--success); background: var(--success-bg);
                         border-style: solid; }
 .upload-area input { display: none; }
 .upload-icon { width: 48px; height: 48px; margin: 0 auto 12px; border-radius: 12px;
                background: linear-gradient(135deg, #007aff, #5856d6);
                display: flex; align-items: center; justify-content: center;
-               font-size: 24px; color: white; box-shadow: 0 4px 12px rgba(0,122,255,0.3); }
+               font-size: 24px; color: white;
+               box-shadow: 0 4px 12px rgba(0,122,255,0.3); }
 .upload-area.has-file .upload-icon { background: linear-gradient(135deg, #34c759, #30d158);
                box-shadow: 0 4px 12px rgba(52,199,89,0.3); }
-.upload-label { font-size: 15px; color: var(--text-secondary); margin-top: 4px; }
-.file-info { color: var(--green); font-weight: 500; margin-top: 8px; font-size: 14px; }
+.upload-label { font-size: var(--text-subhead); color: var(--text-secondary); margin-top: 4px; }
+.file-info { color: var(--success); font-weight: 500; margin-top: 8px; font-size: 14px; }
 
-/* === Primary Button === */
+/* Grouped form container */
+.card { background: var(--bg-secondary); border-radius: var(--radius-lg);
+        padding: 20px; margin-bottom: 16px; box-shadow: var(--shadow-sm); }
+.card-title { font-size: var(--text-footnote); font-weight: 600; color: var(--text-secondary);
+              text-transform: uppercase; letter-spacing: 0.5px; padding: 0 4px;
+              margin-bottom: 12px; }
+.container { max-width: 680px; margin: 0 auto; padding: 0 20px 60px; }
+
+/* Form rows */
+.form-row { display: flex; align-items: center; padding: 11px 0;
+            border-bottom: 0.5px solid var(--separator); gap: 12px; }
+.form-row:last-child { border-bottom: none; }
+.form-row label { flex: 0 0 90px; font-size: var(--text-subhead); color: var(--text-primary); font-weight: 400; }
+.form-row .input-wrap { flex: 1; display: flex; justify-content: flex-end; gap: 8px; }
+.form-row select, .form-row input[type="number"], .form-row input[type="password"] {
+    font-family: var(--font-sans); font-size: var(--text-subhead); color: var(--text-primary);
+    background: var(--bg-tertiary); border: none; border-radius: var(--radius-sm);
+    padding: 8px 12px; outline: none; text-align: right; width: 100%;
+    transition: background var(--duration-base) var(--ease-standard);
+    -webkit-appearance: none; }
+.form-row select { padding-right: 28px; text-align: left;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5L6 7.5L9 4.5' stroke='%2386868b' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 10px center; }
+.form-row input:focus, .form-row select:focus {
+    background: var(--bg-secondary);
+    box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.2); }
+.form-row input[type="number"] { width: 80px; text-align: center; }
+
+/* Primary action button */
 .btn-primary { display: block; width: 100%; padding: 16px; border: none;
-               border-radius: var(--radius-md); font-family: var(--font);
-               font-size: 17px; font-weight: 600; letter-spacing: -0.2px;
+               border-radius: var(--radius-md); font-family: var(--font-sans);
+               font-size: var(--text-headline); font-weight: 600; letter-spacing: -0.2px;
                color: white; background: var(--accent); cursor: pointer;
-               transition: all 0.2s; margin-bottom: 16px; box-shadow: var(--shadow-sm); }
+               transition: all var(--duration-fast) var(--ease-standard);
+               margin-bottom: 16px; box-shadow: var(--shadow-sm); }
 .btn-primary:hover { background: var(--accent-hover); box-shadow: var(--shadow-md);
                      transform: translateY(-1px); }
 .btn-primary:active { background: var(--accent-active); transform: translateY(0);
@@ -139,45 +99,66 @@ body { font-family: var(--font); background: var(--bg-primary); color: var(--tex
 .btn-primary:disabled { background: var(--text-tertiary); cursor: not-allowed;
                         transform: none; box-shadow: none; }
 
-/* === Download Button === */
+/* Download button */
 .btn-download { display: inline-flex; align-items: center; gap: 8px; padding: 12px 24px;
-                border: none; border-radius: var(--radius-md); font-family: var(--font);
-                font-size: 15px; font-weight: 600; color: white; background: var(--green);
-                cursor: pointer; transition: all 0.2s; text-decoration: none;
-                box-shadow: var(--shadow-sm); margin-top: 12px; }
+                border: none; border-radius: var(--radius-md); font-family: var(--font-sans);
+                font-size: var(--text-subhead); font-weight: 600; color: white;
+                background: var(--success); cursor: pointer;
+                transition: all var(--duration-fast) var(--ease-standard);
+                text-decoration: none; box-shadow: var(--shadow-sm); margin-top: 12px; }
 .btn-download:hover { background: #2db84e; box-shadow: var(--shadow-md); }
 .btn-download svg { width: 16px; height: 16px; }
 
-/* === Progress Bar === */
+/* Progress */
 .progress-wrap { margin: 16px 0; }
 .progress-track { background: var(--bg-tertiary); border-radius: 6px; height: 8px;
                   overflow: hidden; }
 .progress-fill { height: 100%; border-radius: 6px;
                  background: linear-gradient(90deg, #007aff, #5ac8fa);
-                 transition: width 0.4s ease; min-width: 4px; }
+                 transition: width var(--duration-slow) var(--ease-standard); min-width: 4px; }
 .progress-info { display: flex; justify-content: space-between; margin-top: 8px; }
 .progress-pct { font-size: 26px; font-weight: 700; color: var(--text-primary);
                 letter-spacing: -1px; font-variant-numeric: tabular-nums; }
-.progress-status { font-size: 13px; color: var(--text-secondary); margin-top: 4px;
+.progress-status { font-size: var(--text-footnote); color: var(--text-secondary); margin-top: 4px;
                    line-height: 1.4; }
 
-/* === Preview === */
+/* Preview */
 .preview-box { background: var(--bg-tertiary); border-radius: var(--radius-md);
                padding: 16px; margin-top: 16px; white-space: pre-wrap;
-               font-family: var(--font-mono); font-size: 12px; line-height: 1.7;
+               font-family: var(--font-mono); font-size: var(--text-caption-1); line-height: 1.7;
                color: var(--text-primary); max-height: 360px; overflow-y: auto;
                border: 0.5px solid var(--separator); }
-.preview-title { font-size: 13px; font-weight: 600; color: var(--text-secondary);
+.preview-title { font-size: var(--text-footnote); font-weight: 600; color: var(--text-secondary);
                  text-transform: uppercase; letter-spacing: 0.5px; margin-top: 20px;
                  margin-bottom: 8px; }
 
+/* App header */
+.app-header { text-align: center; padding: 48px 20px 32px; }
+.app-header h1 { font-size: var(--text-large-title); font-weight: 700; letter-spacing: -0.5px;
+                  background: linear-gradient(135deg, var(--text-primary) 0%, #424245 100%);
+                  -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.app-header p { font-size: var(--text-headline); color: var(--text-secondary); margin-top: 8px;
+                font-weight: 400; letter-spacing: -0.2px; }
+
 .hidden { display: none; }
 
-/* === Responsive === */
 @media (max-width: 500px) {
     .app-header h1 { font-size: 28px; }
     .form-row label { flex: 0 0 72px; font-size: 14px; }
 }
+"""
+
+HTML_PAGE = """<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PDF Translator</title>
+<style>
+/* === Apple Design System (shared tokens + primitives) === */
+""" + APPLE_CSS + """
+/* === Page-specific styles === */
+""" + PAGE_STYLES + """
 </style>
 </head>
 <body>
