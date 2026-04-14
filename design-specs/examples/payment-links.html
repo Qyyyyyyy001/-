@@ -350,11 +350,24 @@
     .copy-icon:hover { color: var(--color-icon-icon-primary); }
 
     /* ============================================================
-       Components — Status text (借用功能色 token)
+       Components — Status Tag (所有 badge 统一宽度 · 向最长的对齐)
        ============================================================ */
-    .status-success { color: var(--color-function-success-text); }
-    .status-warning { color: var(--color-function-warning-text); }
-    .status-info    { color: var(--color-text-text-secondary); }
+    .status-success,
+    .status-warning,
+    .status-info {
+      display: inline-block;
+      padding: 2px 10px;
+      min-width: 150px;
+      text-align: center;
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 18px;
+      box-sizing: border-box;
+    }
+    .status-success { background: var(--color-function-success-bg); color: var(--color-function-success-text); }
+    .status-warning { background: var(--color-function-warning-bg); color: var(--color-function-warning-text); }
+    .status-info    { background: var(--color-function-info-bg);    color: var(--color-function-info-text); }
 
     /* ============================================================
        Annotation — 红箭头说明 (来自原始截图的设计标注)
@@ -542,7 +555,7 @@
                     </span>
                   </td>
                   <td class="col-amount">1 USDT</td>
-                  <td class="status-success">有效（永久有效）</td>
+                  <td><span class="status-success">有效（永久有效）</span></td>
                   <td><button class="btn btn--link">查看二维码</button></td>
                   <td class="col-actions"><button class="btn btn--link is-danger">删除</button></td>
                 </tr>
@@ -559,7 +572,7 @@
                     </span>
                   </td>
                   <td class="col-amount">33 USDT</td>
-                  <td class="status-info">无效（24小时有效）</td>
+                  <td><span class="status-info">无效（24小时有效）</span></td>
                   <td><button class="btn btn--link">查看二维码</button></td>
                   <td class="col-actions"><button class="btn btn--link is-danger">删除</button></td>
                 </tr>
@@ -576,7 +589,7 @@
                     </span>
                   </td>
                   <td class="col-amount">12 USDT</td>
-                  <td class="status-info">无效（24小时有效）</td>
+                  <td><span class="status-info">无效（24小时有效）</span></td>
                   <td><button class="btn btn--link">查看二维码</button></td>
                   <td class="col-actions"><button class="btn btn--link is-danger">删除</button></td>
                 </tr>
@@ -593,7 +606,7 @@
                     </span>
                   </td>
                   <td class="col-amount">1.1 USDT</td>
-                  <td class="status-info">无效（24小时有效）</td>
+                  <td><span class="status-info">无效（24小时有效）</span></td>
                   <td><button class="btn btn--link">查看二维码</button></td>
                   <td class="col-actions"><button class="btn btn--link is-danger">删除</button></td>
                 </tr>
@@ -610,7 +623,7 @@
                     </span>
                   </td>
                   <td class="col-amount">3 USDT</td>
-                  <td class="status-info">无效（24小时有效）</td>
+                  <td><span class="status-info">无效（24小时有效）</span></td>
                   <td><button class="btn btn--link">查看二维码</button></td>
                   <td class="col-actions"><button class="btn btn--link is-danger">删除</button></td>
                 </tr>
@@ -627,7 +640,7 @@
                     </span>
                   </td>
                   <td class="col-amount">1 USDT</td>
-                  <td class="status-info">无效（1小时有效）</td>
+                  <td><span class="status-info">无效（1小时有效）</span></td>
                   <td><button class="btn btn--link">查看二维码</button></td>
                   <td class="col-actions"><button class="btn btn--link is-danger">删除</button></td>
                 </tr>
@@ -644,7 +657,7 @@
                     </span>
                   </td>
                   <td class="col-amount">0.88 USDT</td>
-                  <td class="status-info">无效（1小时有效）</td>
+                  <td><span class="status-info">无效（1小时有效）</span></td>
                   <td><button class="btn btn--link">查看二维码</button></td>
                   <td class="col-actions"><button class="btn btn--link is-danger">删除</button></td>
                 </tr>
@@ -661,7 +674,7 @@
                     </span>
                   </td>
                   <td class="col-amount">1 USDT</td>
-                  <td class="status-info">无效（1小时有效）</td>
+                  <td><span class="status-info">无效（1小时有效）</span></td>
                   <td><button class="btn btn--link">查看二维码</button></td>
                   <td class="col-actions"><button class="btn btn--link is-danger">删除</button></td>
                 </tr>
