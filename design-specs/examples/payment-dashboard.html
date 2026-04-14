@@ -349,7 +349,7 @@
       margin-left: 4px;
     }
 
-    /* Status tag */
+    /* Status tag — 所有 tag 统一宽度，向最长 (Payment Abnormal) 对齐 */
     .tag {
       display: inline-block;
       padding: 2px 8px;
@@ -357,6 +357,9 @@
       font-size: 12px;
       font-weight: 500;
       line-height: 18px;
+      min-width: 130px;
+      text-align: center;
+      box-sizing: border-box;
     }
     .tag--pending   { background: var(--color-function-warning-bg);  color: var(--color-function-warning-text); }
     .tag--expired   { background: var(--color-function-neutral-bg);  color: var(--color-function-neutral-text); }
