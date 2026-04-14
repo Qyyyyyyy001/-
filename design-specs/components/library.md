@@ -62,9 +62,37 @@
 | `41:2070 颜色 / 41:3859 字体 / 41:3860 阴影 / 41:3861 Grid / 41:3863 Spacing` | Design System 页的 Colors / Typography / Spacing 板 | 已覆盖 |
 | `41:3864 Icon CEX / 41:3865 Icon web3` | Design System 页的 Icons 板 | 已覆盖 (370+ 命名) |
 
-## 使用建议
+## 已绑定为 Figma Component 的变体
 
-- **实现新 UI 时**：先打开 `Component Library` 找对应组件参考板 → 按 token 抄到代码
-- **改配色 / 改字号时**：不要直接改 board 里的硬编码 —— 去 `Design System → Colors / Typography` 里改原 token，整套页面联动
-- **加新组件时**：参考这里的 board 命名规范（`<Component> · <中文名>`），用相同的 40px padding + 白底 + 16px 圆角
-- **对照源文件时**：每条组件表格都标注了源 Figma page 的 node ID，可以直接在源文件 `node-id=<id>` 拼接打开
+下面 6 个变体已经升级成真正的 Figma `COMPONENT` 节点，放在 Component Library 页面底部的 `__COMPONENTS_SOURCE__` 容器里，可以通过 `createInstance()` / `clone()` 复用：
+
+| Component 名 | Node ID | 用途 |
+| --- | --- | --- |
+| `Button / Primary-Black / Small-36px` | `39:4`  | 主 CTA |
+| `Button / Secondary-Gray / Small-36px` | `39:6`  | 次要 CTA (Soft) |
+| `Link Button / Brand` | `39:8`  | 表格内蓝色链接文字（如 "查看二维码"） |
+| `Link Button / Danger` | `39:10` | 表格内红色链接文字（如 "删除"） |
+| `Tag / Soft / Success` | `39:12` | 绿色状态标签 |
+| `Tag / Soft / Neutral` | `39:14` | 灰色次级状态标签 |
+
+### 真实使用示例
+
+**页面** `收款链接 (Components v2)` (`49:2`) — Gate Pay 收款链接列表页用这 6 个 Component 重画了一遍：
+
+- 顶部 "客户渠道" + "新增" 两颗按钮 = `btnSoft.clone()` + `btnPrimary.clone()` · 文本通过 `findOne(TEXT).characters = "..."` 覆写
+- 表格 8 行的 "二维码状态" Tag = `tagValid.clone() / tagExpired.clone()` · 文本同上
+- "查看二维码" / "删除" 两个 Link Button × 8 行 = `linkBrand.clone()` + `linkDanger.clone()`
+
+### 为什么用 `clone()` 而不是 `createInstance()`
+
+Figma Plugin API 里 `createInstance()` 生成的 INSTANCE 节点对子 Text 做 `characters` 覆写时，虽然 API 层面看起来成功（inspect 能读到新值、fills 正确），但实际画布渲染会把文字变成不可见/截断。使用 `component.clone()` 生成一个普通的 FRAME 副本，可以自由修改子节点，渲染正常。代价是失去了"instance → 跟随 master 更新"的能力，但对这次复刻页面来说足够好。
+
+### Target Figma 文件的 4 个页面
+
+| 页面 | Node ID | 说明 |
+| --- | --- | --- |
+| `收款链接` | `0:1` | v1 —— 原始硬编码版（所有样式直接写死） |
+| `Design System` | `5:2` | 设计 token + Button/Checkbox/Icons 参考板 |
+| `Component Library` | `24:2` | 34 个组件参考板 + `__COMPONENTS_SOURCE__` 隐藏容器（6 个 Component 源） |
+| **`收款链接 (Components v2)`** | `49:2` | **v2 —— 使用 Component clone 的版本**，按钮/Tag/Link 都是从 Component 源复制出来的 |
+
