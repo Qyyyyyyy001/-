@@ -1,24 +1,13 @@
-"""原位翻译模块 - 在原PDF上直接替换文字，保留图片和布局
-
-Typography Design System:
-  - H1/H2/H3/Body/Caption classified by font size ratio
-  - Color contrast per level (darker = more prominent)
-  - 160% line height for readability
-  - Empty pages auto-removed
-
-Note: draw_rect white fill covers text visually but does NOT remove
-the original text from the PDF content stream. This is a PyMuPDF
-limitation — redaction API was tested but causes rendering issues.
-"""
+"""原位翻译模块 - 在原PDF上直接替换文字，保留图片和布局"""
 from __future__ import annotations
 
+import re
 import fitz  # PyMuPDF
 
 from pdf_translator.fonts import find_cjk_font
 
-# ── Typography Constants ────────────────────────────────
-_LINE_HEIGHT = 1.6           # 160% line spacing
-_CHAR_WIDTH_RATIO = 0.72     # CJK char width ≈ 72% of font size
+_LINE_HEIGHT = 1.6
+_CHAR_WIDTH_RATIO = 0.72
 _MIN_FONT_SIZE = 4
 
 _LEVEL_THRESHOLDS = {
@@ -36,6 +25,13 @@ _MIN_SIZE_RATIOS = {
 }
 _TOP_PADDING = {"h1": 4.0, "h2": 3.0, "h3": 2.0, "body": 0.0, "caption": 0.0}
 
+_PAGE_NUM_PATTERNS = [
+    re.compile(r"^[\s\dIVXivx\-–—·•/|.,]+$"),
+    re.compile(r"^\s*page\s*\d+(\s*(of|/)\s*\d+)?\s*$", re.I),
+    re.compile(r"^\s*\d+\s*(of|/)\s*\d+\s*$", re.I),
+    re.compile(r"^\s*-\s*\d+\s*-\s*$"),
+]
+
 
 def _chars_per_line(width: float, font_size: float) -> int:
     return max(int(width / (font_size * _CHAR_WIDTH_RATIO)), 1)
@@ -52,11 +48,18 @@ def translate_pdf_inplace(
     remove_empty: bool = True,
     progress_callback=None,
 ):
+    # Pre-flight: test translator works
+    try:
+        test = translator_fn("Hello")
+        if not test:
+            raise RuntimeError("翻译引擎返回空结果，请检查网络连接")
+    except Exception as e:
+        raise RuntimeError(f"翻译引擎测试失败: {e}") from e
+
     cjk_font = find_cjk_font(font_path)
-    if not cjk_font:
-        font_kw = {"fontname": "china-s"}
-    else:
-        font_kw = {"fontfile": cjk_font, "fontname": "CJK"}
+    font_kw = {"fontname": "china-s"} if not cjk_font else {
+        "fontfile": cjk_font, "fontname": "CJK"
+    }
 
     doc = fitz.open(input_path)
     total_pages = len(doc)
@@ -67,126 +70,145 @@ def translate_pdf_inplace(
     pages_to_process = list(range(start_page, end_page))
     total = len(pages_to_process)
     empty_pages = []
+    stats = {"translated": 0, "failed": 0, "skipped": 0}
 
     for idx, page_num in enumerate(pages_to_process):
         page = doc[page_num]
-        blocks = page.get_text("dict")["blocks"]
+        text_blocks = _extract_text_blocks(page)
 
-        # ── Phase 1: Collect all text blocks ──
-        text_blocks = []
-        all_font_sizes = []
-
-        for block in blocks:
-            if block["type"] != 0:
-                continue
-
-            block_text_parts = []
-            spans_info = []
-            is_bold = False
-
-            for line in block["lines"]:
-                line_parts = []
-                for span in line["spans"]:
-                    text = span["text"].strip()
-                    if text:
-                        line_parts.append(text)
-                        spans_info.append(span)
-                        if span.get("flags", 0) & (1 << 4):
-                            is_bold = True
-                if line_parts:
-                    block_text_parts.append(" ".join(line_parts))
-
-            original_text = " ".join(block_text_parts).strip()
-            if not original_text or len(original_text) < 2:
-                continue
-
-            avg_size = (
-                sum(s["size"] for s in spans_info) / len(spans_info)
-                if spans_info else 12
-            )
-            all_font_sizes.append(avg_size)
-
-            text_blocks.append({
-                "text": original_text,
-                "bbox": fitz.Rect(block["bbox"]),
-                "spans_info": spans_info,
-                "avg_size": avg_size,
-                "is_bold": is_bold,
-            })
-
-        # A page is "empty" only if it had no text at all originally.
-        # Filtering may also drop page numbers/headers but never cause empty.
-        had_text = bool(text_blocks)
-        text_blocks = _filter_boilerplate(text_blocks, page.rect)
-
-        if not had_text:
+        if not text_blocks:
             empty_pages.append(page_num)
             if progress_callback:
                 progress_callback(idx + 1, total)
             continue
 
-        if not text_blocks:
-            # All blocks were boilerplate — skip translation but keep the page
-            if progress_callback:
-                progress_callback(idx + 1, total)
-            continue
+        # Filter page numbers but only if it doesn't remove everything
+        filtered = _filter_page_numbers(text_blocks, page.rect)
+        if filtered:
+            text_blocks = filtered
 
-        # ── Phase 2: Classify + translate with paragraph context ──
-        body_size = _estimate_body_size(all_font_sizes)
+        body_size = _estimate_body_size([tb["avg_size"] for tb in text_blocks])
 
+        # Classify and translate each block
         for tb in text_blocks:
             tb["level"] = _classify_level(tb["avg_size"], body_size, tb["is_bold"])
-            tb["translated"] = None
+            try:
+                result = translator_fn(tb["text"])
+                if result and result.strip():
+                    tb["translated"] = result
+                    stats["translated"] += 1
+                else:
+                    tb["translated"] = None
+                    stats["skipped"] += 1
+            except Exception:
+                tb["translated"] = None
+                stats["failed"] += 1
 
-        _translate_with_context(text_blocks, translator_fn)
-
-        # ── Phase 3: Cover original text and insert translations ──
+        # Render translations
         for tb in text_blocks:
             if not tb["translated"]:
                 continue
 
             bbox = tb["bbox"]
-            level = tb["level"]
-            orig_size = tb["avg_size"]
-
             page.draw_rect(bbox, color=None, fill=(1, 1, 1))
-
-            color = _get_color(level, tb["spans_info"])
+            color = _get_color(tb["level"], tb["spans_info"])
 
             if bilingual:
                 insert_rect = fitz.Rect(
                     bbox.x0, bbox.y1 + 2, bbox.x1, bbox.y1 + 2 + bbox.height
                 )
-                font_size = max(orig_size * 0.85, 6)
+                font_size = max(tb["avg_size"] * 0.85, 6)
                 _insert_text(page, insert_rect, tb["translated"],
                              font_size, (0.18, 0.24, 0.55), font_kw)
             else:
-                padding = _TOP_PADDING.get(level, 0)
+                padding = _TOP_PADDING.get(tb["level"], 0)
                 render_rect = fitz.Rect(
                     bbox.x0, bbox.y0 + padding, bbox.x1, bbox.y1
                 )
-                font_size = _calc_font_size(orig_size, body_size, level)
+                font_size = _calc_font_size(tb["avg_size"], body_size, tb["level"])
                 _insert_text(page, render_rect, tb["translated"],
                              font_size, color, font_kw)
 
         if progress_callback:
             progress_callback(idx + 1, total)
 
-    # Only remove empty pages if we'd still have at least one page left
+    # Remove truly empty pages (but keep at least 1)
     remaining = len(doc) - len(empty_pages)
     if remove_empty and empty_pages and remaining > 0:
         for pn in sorted(empty_pages, reverse=True):
             doc.delete_page(pn)
-        removed = len(empty_pages)
-    else:
-        removed = 0
+        stats["pages_removed"] = len(empty_pages)
 
     doc.save(output_path, garbage=4, deflate=True)
     doc.close()
-    return {"empty_removed": removed}
+    return stats
 
 
-# ── Helpers ─────────────────────────────────────────────
+# ── Text extraction ─────────────────────────────────────
+
+def _extract_text_blocks(page) -> list[dict]:
+    """Extract all text blocks from a page with metadata."""
+    blocks = page.get_text("dict")["blocks"]
+    result = []
+
+    for block in blocks:
+        if block["type"] != 0:
+            continue
+
+        parts = []
+        spans_info = []
+        is_bold = False
+
+        for line in block["lines"]:
+            line_parts = []
+            for span in line["spans"]:
+                text = span["text"].strip()
+                if text:
+                    line_parts.append(text)
+                    spans_info.append(span)
+                    if span.get("flags", 0) & (1 << 4):
+                        is_bold = True
+            if line_parts:
+                parts.append(" ".join(line_parts))
+
+        original = " ".join(parts).strip()
+        if not original or len(original) < 2:
+            continue
+
+        avg_size = (
+            sum(s["size"] for s in spans_info) / len(spans_info)
+            if spans_info else 12
+        )
+
+        result.append({
+            "text": original,
+            "bbox": fitz.Rect(block["bbox"]),
+            "spans_info": spans_info,
+            "avg_size": avg_size,
+            "is_bold": is_bold,
+        })
+
+    return result
+
+
+def _filter_page_numbers(blocks: list[dict], page_rect) -> list[dict]:
+    """Remove page numbers at the edges. Returns filtered list,
+    or empty list if everything would be removed."""
+    top_zone = page_rect.height * 0.08
+    bot_zone = page_rect.height * 0.92
+
+    result = []
+    for b in blocks:
+        y_center = (b["bbox"].y0 + b["bbox"].y1) / 2
+        in_margin = y_center < top_zone or y_center > bot_zone
+        is_short = len(b["text"]) <= 25
+        if in_margin and is_short and any(p.match(b["text"]) for p in _PAGE_NUM_PATTERNS):
+            continue
+        result.append(b)
+    return result
+
+
+# ── Typography ──────────────────────────────────────────
 
 def _classify_level(font_size: float, body_size: float, is_bold: bool) -> str:
     if body_size <= 0:
@@ -203,51 +225,6 @@ def _classify_level(font_size: float, body_size: float, is_bold: bool) -> str:
     return "caption"
 
 
-_BOILERPLATE_MARGIN = 0.08   # top/bottom 8% of page
-_BOILERPLATE_MAX_CHARS = 25  # short text only
-
-
-def _filter_boilerplate(blocks: list[dict], page_rect) -> list[dict]:
-    """Remove page numbers and running headers/footers from edge zones."""
-    import re
-    top_zone = page_rect.height * _BOILERPLATE_MARGIN
-    bot_zone = page_rect.height * (1 - _BOILERPLATE_MARGIN)
-
-    patterns = [
-        re.compile(r"^[\s\dIVXivx\-–—·•/|.,]+$"),           # pure digits/roman
-        re.compile(r"^\s*page\s*\d+(\s*(of|/)\s*\d+)?\s*$", re.I),  # "Page 1 of 10"
-        re.compile(r"^\s*\d+\s*(of|/)\s*\d+\s*$", re.I),     # "1/10"
-        re.compile(r"^\s*-\s*\d+\s*-\s*$"),                   # "- 5 -"
-    ]
-
-    result = []
-    for b in blocks:
-        text = b["text"]
-        y_center = (b["bbox"].y0 + b["bbox"].y1) / 2
-        in_margin = y_center < top_zone or y_center > bot_zone
-        is_short = len(text) <= _BOILERPLATE_MAX_CHARS
-        if in_margin and is_short and any(p.match(text) for p in patterns):
-            continue
-        result.append(b)
-    return result
-
-
-def _translate_with_context(blocks: list[dict], translator_fn):
-    """Translate each block individually.
-
-    An earlier version attempted to batch adjacent blocks with a separator
-    token ("┃BLOCK┃") to give the translator paragraph context, but machine
-    translators (Google/DeepL) translate or collapse the separator, making
-    it impossible to reliably split the result back. Individual translation
-    is slower but correct.
-    """
-    for tb in blocks:
-        try:
-            tb["translated"] = translator_fn(tb["text"])
-        except Exception:
-            tb["translated"] = None
-
-
 def _estimate_body_size(font_sizes: list[float]) -> float:
     if not font_sizes:
         return 12.0
@@ -259,7 +236,6 @@ def _estimate_body_size(font_sizes: list[float]) -> float:
 
 
 def _get_color(level: str, spans_info: list[dict]) -> tuple:
-    """Use design-system color, but preserve original non-black colors."""
     if spans_info:
         raw = spans_info[0].get("color", 0)
         if isinstance(raw, int) and raw != 0:
@@ -280,8 +256,9 @@ def _calc_font_size(orig_size: float, body_size: float, level: str) -> float:
     return max(target, _MIN_FONT_SIZE)
 
 
+# ── Text insertion ──────────────────────────────────────
+
 def _expand_rect(rect: fitz.Rect, font_size: float, text: str) -> fitz.Rect:
-    """Expand rect height to fit text with current line height."""
     width = rect.width
     if width <= 0:
         return rect
@@ -294,7 +271,6 @@ def _expand_rect(rect: fitz.Rect, font_size: float, text: str) -> fitz.Rect:
 
 
 def _insert_text(page, rect, text, font_size, color, font_kw):
-    """Insert text: single-line uses insert_text (no clip), multi-line uses textbox."""
     cpl = _chars_per_line(rect.width, font_size)
 
     try:

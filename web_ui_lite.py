@@ -621,16 +621,27 @@ def run_translation(pdf_path, params):
         )
 
         elapsed = time.time() - start_time
-        empty_removed = result.get("empty_removed", 0)
-        status = f"翻译完成! 共 {end - start} 页, 耗时 {elapsed:.1f} 秒"
-        if empty_removed:
-            status += f", 删除 {empty_removed} 个空白页"
+        translated = result.get("translated", 0)
+        failed = result.get("failed", 0)
+        skipped = result.get("skipped", 0)
+        removed = result.get("pages_removed", 0)
+
+        parts = [f"翻译完成! {end - start} 页, {elapsed:.1f} 秒"]
+        parts.append(f"成功 {translated} 块")
+        if failed:
+            parts.append(f"失败 {failed} 块")
+        if removed:
+            parts.append(f"删除 {removed} 空白页")
+        status = ", ".join(parts)
+
+        if translated == 0 and failed > 0:
+            status = f"翻译失败: 全部 {failed} 个文字块翻译出错，请检查网络"
 
         translation_state.update({
             "running": False,
             "status": status,
-            "result_file": output_path,
-            "preview": "PDF已生成（保留原有图片和布局）",
+            "result_file": output_path if translated > 0 else None,
+            "preview": f"翻译: {translated} 成功, {failed} 失败, {skipped} 跳过" if translated > 0 else "",
         })
 
     except CancelledError:
