@@ -15,9 +15,17 @@ import time
 import cgi
 import urllib.parse
 
+import base64
+import io
+
 from pdf_translator.extractor import get_page_count
 from pdf_translator.translator import create_backend
 from pdf_translator.overlay import translate_pdf_inplace
+
+
+class CancelledError(Exception):
+    """Raised from the progress callback to abort translation."""
+
 
 # 全局翻译状态
 translation_state = {
@@ -28,7 +36,23 @@ translation_state = {
     "result_file": None,
     "preview": "",
     "error": None,
+    "cancel_requested": False,
 }
+
+
+def _generate_thumbnail(pdf_path: str) -> str:
+    """Render first page as a small PNG thumbnail, return base64 string."""
+    try:
+        import fitz
+        doc = fitz.open(pdf_path)
+        try:
+            pix = doc[0].get_pixmap(matrix=fitz.Matrix(0.3, 0.3))
+            png_bytes = pix.tobytes("png")
+            return base64.b64encode(png_bytes).decode("ascii")
+        finally:
+            doc.close()
+    except Exception:
+        return ""
 
 HTML_PAGE = """<!DOCTYPE html>
 <html lang="zh-CN">
@@ -62,6 +86,26 @@ HTML_PAGE = """<!DOCTYPE html>
              "Helvetica Neue", "PingFang SC", "Microsoft YaHei", sans-serif;
     --font-mono: "SF Mono", SFMono-Regular, ui-monospace, Menlo, Monaco, monospace;
 }
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg-primary: #000000;
+        --bg-secondary: #1c1c1e;
+        --bg-tertiary: #2c2c2e;
+        --text-primary: #f5f5f7;
+        --text-secondary: #98989d;
+        --text-tertiary: #636366;
+        --accent: #0a84ff;
+        --accent-hover: #2b96ff;
+        --accent-active: #0073e6;
+        --green: #30d158;
+        --green-bg: rgba(48,209,88,0.12);
+        --separator: rgba(84,84,88,0.35);
+        --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
+        --shadow-md: 0 4px 14px rgba(0,0,0,0.4);
+        --shadow-lg: 0 8px 28px rgba(0,0,0,0.5);
+    }
+}
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: var(--font); background: var(--bg-primary); color: var(--text-primary);
        min-height: 100vh; -webkit-font-smoothing: antialiased; }
@@ -69,8 +113,7 @@ body { font-family: var(--font); background: var(--bg-primary); color: var(--tex
 /* === Layout === */
 .app-header { text-align: center; padding: 48px 20px 32px; }
 .app-header h1 { font-size: 34px; font-weight: 700; letter-spacing: -0.5px;
-                  background: linear-gradient(135deg, var(--text-primary) 0%, #424245 100%);
-                  -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+                  color: var(--text-primary); }
 .app-header p { font-size: 17px; color: var(--text-secondary); margin-top: 8px;
                 font-weight: 400; letter-spacing: -0.2px; }
 .container { max-width: 680px; margin: 0 auto; padding: 0 20px 60px; }
@@ -95,7 +138,7 @@ body { font-family: var(--font); background: var(--bg-primary); color: var(--tex
     transition: background 0.2s; -webkit-appearance: none; }
 .form-row select { padding-right: 28px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5L6 7.5L9 4.5' stroke='%2386868b' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
     background-repeat: no-repeat; background-position: right 10px center; text-align: left; }
-.form-row input:focus, .form-row select:focus { background: #e8e8ed; }
+.form-row input:focus, .form-row select:focus { background: var(--separator); }
 .form-row input[type="number"] { width: 80px; text-align: center; }
 
 /* === Toggle Switch (Apple style) === */
@@ -113,7 +156,7 @@ body { font-family: var(--font); background: var(--bg-primary); color: var(--tex
 .upload-area { border: 2px dashed var(--separator); border-radius: var(--radius-md);
                padding: 36px 20px; text-align: center; cursor: pointer;
                transition: all 0.3s ease; background: var(--bg-tertiary); }
-.upload-area:hover { border-color: var(--accent); background: #f0f5ff; }
+.upload-area:hover { border-color: var(--accent); background: var(--bg-secondary); }
 .upload-area.has-file { border-color: var(--green); background: var(--green-bg);
                         border-style: solid; }
 .upload-area input { display: none; }
@@ -147,6 +190,27 @@ body { font-family: var(--font); background: var(--bg-primary); color: var(--tex
                 box-shadow: var(--shadow-sm); margin-top: 12px; }
 .btn-download:hover { background: #2db84e; box-shadow: var(--shadow-md); }
 .btn-download svg { width: 16px; height: 16px; }
+
+.btn-cancel { display: inline-flex; align-items: center; gap: 8px; padding: 10px 20px;
+              border: 1px solid var(--separator); border-radius: var(--radius-md);
+              font-family: var(--font); font-size: 14px; font-weight: 500;
+              color: var(--text-secondary); background: transparent; cursor: pointer;
+              transition: all 0.2s; margin-top: 12px; }
+.btn-cancel:hover { color: #ff3b30; border-color: #ff3b30; }
+
+/* Smooth entry animation for result card */
+@keyframes slideUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+#resultCard:not(.hidden) { animation: slideUp 0.35s cubic-bezier(0.25, 0.8, 0.25, 1); }
+#downloadArea:not(.hidden), #previewArea:not(.hidden) {
+    animation: slideUp 0.35s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+/* PDF thumbnail preview */
+.pdf-thumb { max-width: 120px; max-height: 160px; border-radius: 6px;
+             box-shadow: var(--shadow-md); margin: 12px auto 0; display: block; }
 
 /* === Progress Bar === */
 .progress-wrap { margin: 16px 0; }
@@ -254,6 +318,7 @@ body { font-family: var(--font); background: var(--bg-primary); color: var(--tex
                     Download
                 </a>
             </div>
+            <button class="btn-cancel hidden" id="cancelBtn" onclick="cancelTranslation()">Cancel</button>
         </div>
         <div id="previewArea" class="hidden">
             <div class="preview-title">Preview</div>
@@ -282,16 +347,40 @@ function handleFileSelect(input) {
             document.getElementById('endPage').max = d.total_pages;
             document.getElementById('startPage').max = d.total_pages;
         }
+        if (d.thumbnail) {
+            let img = document.getElementById('pdfThumb');
+            if (!img) {
+                img = document.createElement('img');
+                img.id = 'pdfThumb';
+                img.className = 'pdf-thumb';
+                document.getElementById('uploadArea').appendChild(img);
+            }
+            img.src = 'data:image/png;base64,' + d.thumbnail;
+        }
     });
+}
+
+function validatePages() {
+    const s = parseInt(document.getElementById('startPage').value) || 1;
+    const e = parseInt(document.getElementById('endPage').value) || 1;
+    if (s > e) {
+        alert('Start page (' + s + ') cannot be greater than end page (' + e + ').');
+        return false;
+    }
+    return true;
 }
 
 function startTranslation() {
     if (!uploadedFile) { alert('Please upload a PDF first.'); return; }
+    if (!validatePages()) return;
     const btn = document.getElementById('translateBtn');
     btn.disabled = true; btn.textContent = 'Translating...';
     document.getElementById('resultCard').classList.remove('hidden');
     document.getElementById('downloadArea').classList.add('hidden');
     document.getElementById('previewArea').classList.add('hidden');
+    document.getElementById('cancelBtn').classList.remove('hidden');
+    // Smooth scroll to result
+    setTimeout(() => document.getElementById('resultCard').scrollIntoView({behavior:'smooth', block:'start'}), 100);
 
     const fd = new FormData();
     fd.append('file', uploadedFile);
@@ -312,6 +401,7 @@ function pollProgress() {
             clearInterval(pollTimer);
             const btn = document.getElementById('translateBtn');
             btn.disabled = false; btn.textContent = 'Translate';
+            document.getElementById('cancelBtn').classList.add('hidden');
             if (d.result_file) {
                 document.getElementById('downloadArea').classList.remove('hidden');
                 document.getElementById('downloadLink').href = '/download?f='+encodeURIComponent(d.result_file);
@@ -321,6 +411,16 @@ function pollProgress() {
                 document.getElementById('previewText').textContent = d.preview;
             }
         }
+    });
+}
+
+function cancelTranslation() {
+    fetch('/cancel', {method:'POST'}).then(() => {
+        clearInterval(pollTimer);
+        const btn = document.getElementById('translateBtn');
+        btn.disabled = false; btn.textContent = 'Translate';
+        document.getElementById('cancelBtn').classList.add('hidden');
+        document.getElementById('statusText').textContent = 'Cancelled';
     });
 }
 
@@ -359,6 +459,9 @@ class TranslationHandler(http.server.BaseHTTPRequestHandler):
             self._handle_upload()
         elif self.path == "/translate":
             self._handle_translate()
+        elif self.path == "/cancel":
+            translation_state["cancel_requested"] = True
+            self._send_json({"status": "cancelled"})
         else:
             self.send_error(404)
 
@@ -382,7 +485,12 @@ class TranslationHandler(http.server.BaseHTTPRequestHandler):
             uploaded_pdf_path = tmp.name
             try:
                 total = get_page_count(uploaded_pdf_path)
-                self._send_json({"total_pages": total, "path": uploaded_pdf_path})
+                thumbnail = _generate_thumbnail(uploaded_pdf_path)
+                self._send_json({
+                    "total_pages": total,
+                    "path": uploaded_pdf_path,
+                    "thumbnail": thumbnail,
+                })
             except Exception as e:
                 self._send_json({"error": str(e)})
         else:
@@ -471,7 +579,8 @@ def run_translation(pdf_path, params):
 
     translation_state = {
         "running": True, "progress": 0, "total": 0,
-        "status": "初始化翻译引擎...", "result_file": None, "preview": "", "error": None,
+        "status": "初始化翻译引擎...", "result_file": None, "preview": "",
+        "error": None, "cancel_requested": False,
     }
 
     try:
@@ -489,6 +598,8 @@ def run_translation(pdf_path, params):
         start_time = time.time()
 
         def progress_cb(current, total):
+            if translation_state.get("cancel_requested"):
+                raise CancelledError("User cancelled")
             translation_state["progress"] = current
             elapsed = time.time() - start_time
             speed = current / elapsed if elapsed > 0 else 0
@@ -522,6 +633,11 @@ def run_translation(pdf_path, params):
             "preview": "PDF已生成（保留原有图片和布局）",
         })
 
+    except CancelledError:
+        translation_state.update({
+            "running": False,
+            "status": "已取消",
+        })
     except Exception as e:
         translation_state.update({
             "running": False,

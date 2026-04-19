@@ -114,21 +114,23 @@ def translate_pdf_inplace(
                 "is_bold": is_bold,
             })
 
+        # Filter out page numbers and running headers/footers
+        text_blocks = _filter_boilerplate(text_blocks, page.rect)
+
         if not text_blocks:
             empty_pages.append(page_num)
             if progress_callback:
                 progress_callback(idx + 1, total)
             continue
 
-        # ── Phase 2: Classify + translate (mutate in place) ──
+        # ── Phase 2: Classify + translate with paragraph context ──
         body_size = _estimate_body_size(all_font_sizes)
 
         for tb in text_blocks:
             tb["level"] = _classify_level(tb["avg_size"], body_size, tb["is_bold"])
-            try:
-                tb["translated"] = translator_fn(tb["text"])
-            except Exception:
-                tb["translated"] = None
+            tb["translated"] = None
+
+        _translate_with_context(text_blocks, translator_fn)
 
         # ── Phase 3: Cover original text and insert translations ──
         for tb in text_blocks:
@@ -186,6 +188,110 @@ def _classify_level(font_size: float, body_size: float, is_bold: bool) -> str:
     if ratio >= _LEVEL_THRESHOLDS["body"]:
         return "h3" if is_bold else "body"
     return "caption"
+
+
+_BOILERPLATE_MARGIN = 0.08   # top/bottom 8% of page
+_BOILERPLATE_MAX_CHARS = 25  # short text only
+# Block separator used when translating grouped paragraphs together
+_BATCH_SEP = "\n┃BLOCK┃\n"
+
+
+def _filter_boilerplate(blocks: list[dict], page_rect) -> list[dict]:
+    """Remove page numbers and running headers/footers from edge zones."""
+    import re
+    top_zone = page_rect.height * _BOILERPLATE_MARGIN
+    bot_zone = page_rect.height * (1 - _BOILERPLATE_MARGIN)
+
+    patterns = [
+        re.compile(r"^[\s\dIVXivx\-–—·•/|.,]+$"),           # pure digits/roman
+        re.compile(r"^\s*page\s*\d+(\s*(of|/)\s*\d+)?\s*$", re.I),  # "Page 1 of 10"
+        re.compile(r"^\s*\d+\s*(of|/)\s*\d+\s*$", re.I),     # "1/10"
+        re.compile(r"^\s*-\s*\d+\s*-\s*$"),                   # "- 5 -"
+    ]
+
+    result = []
+    for b in blocks:
+        text = b["text"]
+        y_center = (b["bbox"].y0 + b["bbox"].y1) / 2
+        in_margin = y_center < top_zone or y_center > bot_zone
+        is_short = len(text) <= _BOILERPLATE_MAX_CHARS
+        if in_margin and is_short and any(p.match(text) for p in patterns):
+            continue
+        result.append(b)
+    return result
+
+
+def _translate_with_context(blocks: list[dict], translator_fn):
+    """Group adjacent body/caption blocks and translate together for context.
+    Headings are translated alone (they're standalone phrases)."""
+    # Build groups: consecutive non-heading blocks go together
+    groups: list[list[int]] = []
+    current: list[int] = []
+    for i, tb in enumerate(blocks):
+        is_heading = tb["level"] in ("h1", "h2", "h3")
+        if is_heading:
+            if current:
+                groups.append(current)
+                current = []
+            groups.append([i])
+        else:
+            current.append(i)
+    if current:
+        groups.append(current)
+
+    for group in groups:
+        if len(group) == 1:
+            tb = blocks[group[0]]
+            try:
+                tb["translated"] = translator_fn(tb["text"])
+            except Exception:
+                pass
+            continue
+
+        # Join with separator, translate as one, split back
+        combined = _BATCH_SEP.join(blocks[i]["text"] for i in group)
+        try:
+            result = translator_fn(combined)
+        except Exception:
+            continue
+        if not result:
+            continue
+
+        parts = _split_translated(result, len(group))
+        for i, part in zip(group, parts):
+            blocks[i]["translated"] = part
+
+
+def _split_translated(text: str, expected_count: int) -> list[str]:
+    """Split a combined translation back into parts.
+    Tries the separator first; falls back to proportional newline split."""
+    # Strip Chinese/English punctuation that translators may insert around markers
+    for sep in (_BATCH_SEP, "┃BLOCK┃", "┃block┃", "BLOCK", "block"):
+        if sep in text:
+            parts = [p.strip() for p in text.split(sep)]
+            parts = [p for p in parts if p]
+            if len(parts) >= expected_count:
+                # Merge extras into the last part if over-split
+                if len(parts) > expected_count:
+                    parts = parts[:expected_count - 1] + [" ".join(parts[expected_count - 1:])]
+                return parts
+            if len(parts) == expected_count - 1:
+                parts.append("")
+                return parts
+
+    # Fallback: split by paragraph breaks proportionally
+    paragraphs = [p for p in text.split("\n") if p.strip()]
+    if len(paragraphs) >= expected_count:
+        chunk = len(paragraphs) // expected_count
+        result = []
+        for i in range(expected_count):
+            start = i * chunk
+            end = (i + 1) * chunk if i < expected_count - 1 else len(paragraphs)
+            result.append("\n".join(paragraphs[start:end]))
+        return result
+
+    # Last resort: put whole translation in first block, empty for rest
+    return [text] + [""] * (expected_count - 1)
 
 
 def _estimate_body_size(font_sizes: list[float]) -> float:
