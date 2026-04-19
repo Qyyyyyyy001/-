@@ -114,11 +114,19 @@ def translate_pdf_inplace(
                 "is_bold": is_bold,
             })
 
-        # Filter out page numbers and running headers/footers
+        # A page is "empty" only if it had no text at all originally.
+        # Filtering may also drop page numbers/headers but never cause empty.
+        had_text = bool(text_blocks)
         text_blocks = _filter_boilerplate(text_blocks, page.rect)
 
-        if not text_blocks:
+        if not had_text:
             empty_pages.append(page_num)
+            if progress_callback:
+                progress_callback(idx + 1, total)
+            continue
+
+        if not text_blocks:
+            # All blocks were boilerplate — skip translation but keep the page
             if progress_callback:
                 progress_callback(idx + 1, total)
             continue
@@ -164,13 +172,18 @@ def translate_pdf_inplace(
         if progress_callback:
             progress_callback(idx + 1, total)
 
-    if remove_empty and empty_pages:
+    # Only remove empty pages if we'd still have at least one page left
+    remaining = len(doc) - len(empty_pages)
+    if remove_empty and empty_pages and remaining > 0:
         for pn in sorted(empty_pages, reverse=True):
             doc.delete_page(pn)
+        removed = len(empty_pages)
+    else:
+        removed = 0
 
     doc.save(output_path, garbage=4, deflate=True)
     doc.close()
-    return {"empty_removed": len(empty_pages)}
+    return {"empty_removed": removed}
 
 
 # ── Helpers ─────────────────────────────────────────────
