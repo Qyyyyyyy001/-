@@ -192,8 +192,6 @@ def _classify_level(font_size: float, body_size: float, is_bold: bool) -> str:
 
 _BOILERPLATE_MARGIN = 0.08   # top/bottom 8% of page
 _BOILERPLATE_MAX_CHARS = 25  # short text only
-# Block separator used when translating grouped paragraphs together
-_BATCH_SEP = "\n┃BLOCK┃\n"
 
 
 def _filter_boilerplate(blocks: list[dict], page_rect) -> list[dict]:
@@ -222,76 +220,19 @@ def _filter_boilerplate(blocks: list[dict], page_rect) -> list[dict]:
 
 
 def _translate_with_context(blocks: list[dict], translator_fn):
-    """Group adjacent body/caption blocks and translate together for context.
-    Headings are translated alone (they're standalone phrases)."""
-    # Build groups: consecutive non-heading blocks go together
-    groups: list[list[int]] = []
-    current: list[int] = []
-    for i, tb in enumerate(blocks):
-        is_heading = tb["level"] in ("h1", "h2", "h3")
-        if is_heading:
-            if current:
-                groups.append(current)
-                current = []
-            groups.append([i])
-        else:
-            current.append(i)
-    if current:
-        groups.append(current)
+    """Translate each block individually.
 
-    for group in groups:
-        if len(group) == 1:
-            tb = blocks[group[0]]
-            try:
-                tb["translated"] = translator_fn(tb["text"])
-            except Exception:
-                pass
-            continue
-
-        # Join with separator, translate as one, split back
-        combined = _BATCH_SEP.join(blocks[i]["text"] for i in group)
+    An earlier version attempted to batch adjacent blocks with a separator
+    token ("┃BLOCK┃") to give the translator paragraph context, but machine
+    translators (Google/DeepL) translate or collapse the separator, making
+    it impossible to reliably split the result back. Individual translation
+    is slower but correct.
+    """
+    for tb in blocks:
         try:
-            result = translator_fn(combined)
+            tb["translated"] = translator_fn(tb["text"])
         except Exception:
-            continue
-        if not result:
-            continue
-
-        parts = _split_translated(result, len(group))
-        for i, part in zip(group, parts):
-            blocks[i]["translated"] = part
-
-
-def _split_translated(text: str, expected_count: int) -> list[str]:
-    """Split a combined translation back into parts.
-    Tries the separator first; falls back to proportional newline split."""
-    # Strip Chinese/English punctuation that translators may insert around markers
-    for sep in (_BATCH_SEP, "┃BLOCK┃", "┃block┃", "BLOCK", "block"):
-        if sep in text:
-            parts = [p.strip() for p in text.split(sep)]
-            parts = [p for p in parts if p]
-            if len(parts) >= expected_count:
-                # Merge extras into the last part if over-split
-                if len(parts) > expected_count:
-                    parts = parts[:expected_count - 1] + [" ".join(parts[expected_count - 1:])]
-                return parts
-            if len(parts) == expected_count - 1:
-                parts.append("")
-                return parts
-
-    # Fallback: split by paragraph breaks proportionally
-    paragraphs = [p for p in text.split("\n") if p.strip()]
-    if len(paragraphs) >= expected_count:
-        chunk = len(paragraphs) // expected_count
-        result = []
-        for i in range(expected_count):
-            start = i * chunk
-            end = (i + 1) * chunk if i < expected_count - 1 else len(paragraphs)
-            result.append("\n".join(paragraphs[start:end]))
-        return result
-
-    # Last resort: put whole translation in first block, empty for rest
-    return [text] + [""] * (expected_count - 1)
+            tb["translated"] = None
 
 
 def _estimate_body_size(font_sizes: list[float]) -> float:
