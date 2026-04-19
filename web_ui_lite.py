@@ -8,6 +8,7 @@ PDF翻译工具 - 轻量Web界面（零额外依赖，用Python自带http.server
 import http.server
 import json
 import os
+import shutil
 import sys
 import tempfile
 import threading
@@ -383,7 +384,6 @@ function startTranslation() {
     setTimeout(() => document.getElementById('resultCard').scrollIntoView({behavior:'smooth', block:'start'}), 100);
 
     const fd = new FormData();
-    fd.append('file', uploadedFile);
     fd.append('target_lang', document.getElementById('targetLang').value);
     fd.append('start_page', document.getElementById('startPage').value);
     fd.append('end_page', document.getElementById('endPage').value);
@@ -436,7 +436,6 @@ area.addEventListener('drop', e=>{
 </body>
 </html>"""
 
-# 临时存储上传的PDF路径
 uploaded_pdf_path = None
 
 
@@ -510,13 +509,6 @@ class TranslationHandler(http.server.BaseHTTPRequestHandler):
             environ={"REQUEST_METHOD": "POST", "CONTENT_TYPE": content_type},
         )
 
-        # 如果表单里有文件，保存它
-        if "file" in form and form["file"].filename:
-            tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
-            tmp.write(form["file"].file.read())
-            tmp.close()
-            uploaded_pdf_path = tmp.name
-
         if not uploaded_pdf_path or not os.path.isfile(uploaded_pdf_path):
             self._send_json({"error": "请先上传PDF文件"})
             return
@@ -552,7 +544,6 @@ class TranslationHandler(http.server.BaseHTTPRequestHandler):
             return
 
         filename = os.path.basename(filepath)
-        import shutil
         self.send_response(200)
         self.send_header("Content-Type", "application/octet-stream")
         self.send_header("Content-Disposition", f'attachment; filename="{filename}"')

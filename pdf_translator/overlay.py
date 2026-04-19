@@ -50,7 +50,7 @@ def translate_pdf_inplace(
 ):
     # Pre-flight: test translator works
     try:
-        test = translator_fn("Hello")
+        test = translator_fn("Hello, world! Testing translation.")
         if not test:
             raise RuntimeError("翻译引擎返回空结果，请检查网络连接")
     except Exception as e:
@@ -258,12 +258,8 @@ def _calc_font_size(orig_size: float, body_size: float, level: str) -> float:
 
 # ── Text insertion ──────────────────────────────────────
 
-def _expand_rect(rect: fitz.Rect, font_size: float, text: str) -> fitz.Rect:
-    width = rect.width
-    if width <= 0:
-        return rect
-    cpl = _chars_per_line(width, font_size)
-    lines = max(1, (len(text) + cpl - 1) // cpl)
+def _expand_rect(rect: fitz.Rect, font_size: float, text_len: int, cpl: int) -> fitz.Rect:
+    lines = max(1, (text_len + cpl - 1) // cpl)
     needed = lines * font_size * _LINE_HEIGHT + font_size * 0.4
     if needed > rect.height:
         return fitz.Rect(rect.x0, rect.y0, rect.x1, rect.y0 + needed)
@@ -279,13 +275,14 @@ def _insert_text(page, rect, text, font_size, color, font_kw):
             page.insert_text(point, text,
                              fontsize=font_size, color=color, **font_kw)
         else:
-            expanded = _expand_rect(rect, font_size, text)
+            expanded = _expand_rect(rect, font_size, len(text), cpl)
             rc = page.insert_textbox(
                 expanded, text, fontsize=font_size, color=color,
                 align=0, lineheight=_LINE_HEIGHT, **font_kw)
             if rc < 0:
                 smaller = max(font_size * 0.75, _MIN_FONT_SIZE)
-                bigger = _expand_rect(rect, smaller, text)
+                smaller_cpl = _chars_per_line(rect.width, smaller)
+                bigger = _expand_rect(rect, smaller, len(text), smaller_cpl)
                 page.insert_textbox(
                     bigger, text, fontsize=smaller, color=color,
                     align=0, lineheight=_LINE_HEIGHT, **font_kw)
